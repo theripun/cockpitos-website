@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Final Context Menu Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            font-family: system-ui, sans-serif;
+            overflow: hidden;
+            cursor: context-menu;
+        }
+        .test-message {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
+            z-index: 10000;
+            font-size: 14px;
+        }
+        .edge-marker {
+            position: absolute;
+            background: rgba(255,0,0,0.3);
+            pointer-events: none;
+        }
+        .top-marker { top: 0; left: 0; right: 0; height: 16px; }
+        .bottom-marker { bottom: 0; left: 0; right: 0; height: 20px; }
+        .left-marker { top: 0; left: 0; bottom: 0; width: 16px; }
+        .right-marker { top: 0; right: 0; bottom: 0; width: 20px; }
+        .center-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0,0,0,0.5);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px dashed rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="test-message">
+        <h3>Context Menu Edge Test</h3>
+        <p>Right-click anywhere to test positioning.</p>
+        <p><strong>Red areas</strong> show the minimum padding zones:</p>
+        <ul>
+            <li>16px from top/left edges</li>
+            <li>20px from bottom/right edges</li>
+        </ul>
+        <p>Menu should never enter these zones.</p>
+    </div>
+    
+    <div class="edge-marker top-marker"></div>
+    <div class="edge-marker bottom-marker"></div>
+    <div class="edge-marker left-marker"></div>
+    <div class="edge-marker right-marker"></div>
+    
+    <div class="center-message">
+        <h2>Context Menu Positioning Test</h2>
+        <p>Right-click anywhere on this page</p>
+        <p>Try clicking near edges and corners</p>
+        <p>Menu should always stay within safe boundaries</p>
+    </div>
+
+    <script>
+        // Final implementation matching the React component
+        function clampToViewport(left, top, w, h, pad = 16) {
+            const minPad = pad;
+            const maxPad = pad + 4; // Extra 4px buffer
+            
+            // Calculate safe boundaries
+            const maxLeft = window.innerWidth - w - maxPad;
+            const maxTop = window.innerHeight - h - maxPad;
+            
+            // Clamp with proper padding
+            const clampedLeft = Math.max(minPad, Math.min(left, maxLeft));
+            const clampedTop = Math.max(minPad, Math.min(top, maxTop));
+            
+            return {
+                left: clampedLeft,
+                top: clampedTop,
+            };
+        }
+
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            
+            // Remove existing test menus
+            document.querySelectorAll('.test-context-menu').forEach(el => el.remove());
+            
+            // Create test menu (matching estimated size from React component)
+            const menuWidth = 220;
+            const menuHeight = 20 * 32 + 20; // 20 items * 32px + 20px padding
+            
+            const clampedPos = clampToViewport(e.clientX, e.clientY, menuWidth, menuHeight, 16);
+            
+            const menu = document.createElement('div');
+            menu.className = 'test-context-menu';
+            menu.style.position = 'fixed';
+            menu.style.background = 'linear-gradient(135deg, #2d3748 0%, #1a202c 100%)';
+            menu.style.border = '1px solid rgba(255,255,255,0.2)';
+            menu.style.borderRadius = '8px';
+            menu.style.padding = '8px';
+            menu.style.minWidth = menuWidth + 'px';
+            menu.style.minHeight = menuHeight + 'px';
+            menu.style.zIndex = '10000';
+            menu.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
+            menu.style.left = clampedPos.left + 'px';
+            menu.style.top = clampedPos.top + 'px';
+            menu.style.boxSizing = 'border-box';
+            menu.style.fontFamily = 'system-ui, sans-serif';
+            menu.style.fontSize = '13px';
+            
+            // Add visual indicators
+            menu.innerHTML = `
+                <div style="padding: 8px; color: #cbd5e0; font-weight: 500; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 4px;">
+                    Position Test Menu
+                </div>
+                <div style="padding: 6px 8px; color: #e2e8f0;">Requested: ${e.clientX}, ${e.clientY}</div>
+                <div style="padding: 6px 8px; color: #68d391;">Clamped: ${clampedPos.left}, ${clampedPos.top}</div>
+                <div style="padding: 6px 8px; color: #4299e1;">Size: ${menuWidth}×${menuHeight}</div>
+                <div style="padding: 6px 8px; color: #ecc94b;">Window: ${window.innerWidth}×${window.innerHeight}</div>
+                <div style="padding: 6px 8px; color: ${clampedPos.left >= 16 && clampedPos.top >= 16 && 
+                    clampedPos.left + menuWidth <= window.innerWidth - 20 && 
+                    clampedPos.top + menuHeight <= window.innerHeight - 20 ? '#68d391' : '#fc8181'};">
+                    In Bounds: ${clampedPos.left >= 16 && clampedPos.top >= 16 && 
+                    clampedPos.left + menuWidth <= window.innerWidth - 20 && 
+                    clampedPos.top + menuHeight <= window.innerHeight - 20 ? '✓ YES' : '✗ NO'}
+                </div>
+            `;
+            
+            document.body.appendChild(menu);
+            
+            // Remove on click outside
+            const removeMenu = () => {
+                if (document.body.contains(menu)) {
+                    document.body.removeChild(menu);
+                }
+                document.removeEventListener('click', removeMenu);
+            };
+            
+            setTimeout(() => {
+                document.addEventListener('click', removeMenu);
+            }, 10);
+        });
+    </script>
+</body>
+</html>

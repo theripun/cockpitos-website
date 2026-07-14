@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Context Menu Debug Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            background: #000;
+            color: white;
+            font-family: system-ui, sans-serif;
+            overflow: hidden;
+        }
+        .debug-info {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 10000;
+        }
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            height: 100vh;
+            width: 100vw;
+        }
+        .grid-cell {
+            border: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: context-menu;
+            font-size: 14px;
+            text-align: center;
+            padding: 10px;
+        }
+        .grid-cell:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        .corner {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: rgba(255,0,0,0.3);
+            z-index: 9999;
+        }
+        #top-left { top: 0; left: 0; }
+        #top-right { top: 0; right: 0; }
+        #bottom-left { bottom: 0; left: 0; }
+        #bottom-right { bottom: 0; right: 0; }
+    </style>
+</head>
+<body>
+    <div class="debug-info" id="debugInfo">
+        Click anywhere to see positioning info
+    </div>
+    
+    <div class="corner" id="top-left"></div>
+    <div class="corner" id="top-right"></div>
+    <div class="corner" id="bottom-left"></div>
+    <div class="corner" id="bottom-right"></div>
+    
+    <div class="test-grid">
+        <div class="grid-cell">Top Left<br>Right-click here</div>
+        <div class="grid-cell">Top Center<br>Right-click here</div>
+        <div class="grid-cell">Top Right<br>Right-click here</div>
+        <div class="grid-cell">Middle Left<br>Right-click here</div>
+        <div class="grid-cell">Center<br>Right-click here</div>
+        <div class="grid-cell">Middle Right<br>Right-click here</div>
+        <div class="grid-cell">Bottom Left<br>Right-click here</div>
+        <div class="grid-cell">Bottom Center<br>Right-click here</div>
+        <div class="grid-cell">Bottom Right<br>Right-click here</div>
+    </div>
+
+    <script>
+        // Debug version of clampToViewport
+        function clampToViewport(left, top, w, h, pad = 16) {
+            console.log(`Input: left=${left}, top=${top}, w=${w}, h=${h}, pad=${pad}`);
+            
+            const minPad = pad;
+            const maxPad = pad + 4; // Extra padding to prevent touching edges
+            
+            console.log(`Padding: minPad=${minPad}, maxPad=${maxPad}`);
+            
+            // Calculate safe boundaries
+            const maxLeft = window.innerWidth - w - maxPad;
+            const maxTop = window.innerHeight - h - maxPad;
+            
+            console.log(`Boundaries: maxLeft=${maxLeft}, maxTop=${maxTop}`);
+            console.log(`Window: ${window.innerWidth}x${window.innerHeight}`);
+            
+            // Clamp position with proper padding
+            const clampedLeft = Math.max(minPad, Math.min(left, maxLeft));
+            const clampedTop = Math.max(minPad, Math.min(top, maxTop));
+            
+            console.log(`Result: left=${clampedLeft}, top=${clampedTop}`);
+            
+            return {
+                left: clampedLeft,
+                top: clampedTop,
+            };
+        }
+
+        // Test different menu sizes
+        const testSizes = [
+            { width: 200, height: 120, name: "Small Menu" },
+            { width: 300, height: 200, name: "Medium Menu" },
+            { width: 400, height: 300, name: "Large Menu" }
+        ];
+
+        document.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            
+            // Clear existing menus
+            document.querySelectorAll('.test-menu').forEach(el => el.remove());
+            
+            // Create debug info
+            const debugInfo = document.getElementById('debugInfo');
+            debugInfo.innerHTML = `
+                Click position: ${e.clientX}, ${e.clientY}<br>
+                Window size: ${window.innerWidth}x${window.innerHeight}<br>
+                <br>
+                Testing different menu sizes:
+            `;
+            
+            // Test each menu size
+            testSizes.forEach((size, index) => {
+                const clamped = clampToViewport(e.clientX, e.clientY, size.width, size.height, 16);
+                
+                const menu = document.createElement('div');
+                menu.className = 'test-menu';
+                menu.style.position = 'fixed';
+                menu.style.background = index === 0 ? '#27272a' : index === 1 ? '#1e3a8a' : '#7e22ce';
+                menu.style.border = '2px solid white';
+                menu.style.borderRadius = '8px';
+                menu.style.padding = '8px';
+                menu.style.minWidth = size.width + 'px';
+                menu.style.minHeight = size.height + 'px';
+                menu.style.zIndex = '10000';
+                menu.style.boxShadow = '0 10px 25px rgba(0,0,0,0.5)';
+                menu.style.left = clamped.left + 'px';
+                menu.style.top = clamped.top + 'px';
+                menu.style.boxSizing = 'border-box';
+                
+                menu.innerHTML = `
+                    <div style="font-weight: bold; margin-bottom: 5px;">${size.name}</div>
+                    <div>Requested: ${e.clientX}, ${e.clientY}</div>
+                    <div>Clamped: ${clamped.left}, ${clamped.top}</div>
+                    <div>Size: ${size.width}x${size.height}</div>
+                    <div>Window: ${window.innerWidth}x${window.innerHeight}</div>
+                `;
+                
+                document.body.appendChild(menu);
+                
+                // Add to debug info
+                debugInfo.innerHTML += `
+                    <br><strong>${size.name}:</strong><br>
+                    Requested: ${e.clientX}, ${e.clientY}<br>
+                    Clamped: ${clamped.left}, ${clamped.top}<br>
+                    Edges: 
+                    Left=${clamped.left >= 16 ? '✓' : '✗'},
+                    Top=${clamped.top >= 16 ? '✓' : '✗'},
+                    Right=${clamped.left + size.width <= window.innerWidth - 20 ? '✓' : '✗'},
+                    Bottom=${clamped.top + size.height <= window.innerHeight - 20 ? '✓' : '✗'}
+                `;
+            });
+        });
+
+        // Add click handler for regular clicks to show position
+        document.addEventListener('click', function(e) {
+            const debugInfo = document.getElementById('debugInfo');
+            debugInfo.innerHTML = `
+                Click position: ${e.clientX}, ${e.clientY}<br>
+                Window size: ${window.innerWidth}x${window.innerHeight}<br>
+                Right-click anywhere to test context menu positioning
+            `;
+        });
+
+        // Update window size info
+        function updateWindowSize() {
+            const debugInfo = document.getElementById('debugInfo');
+            if (debugInfo.innerHTML.includes('Window size')) {
+                debugInfo.innerHTML = debugInfo.innerHTML.replace(
+                    /Window size: \d+x\d+/,
+                    `Window size: ${window.innerWidth}x${window.innerHeight}`
+                );
+            }
+        }
+
+        window.addEventListener('resize', updateWindowSize);
+    </script>
+</body>
+</html>

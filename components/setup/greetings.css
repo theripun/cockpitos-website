@@ -1,0 +1,140 @@
+body {
+    padding: 0;
+    margin: 0;
+}
+
+.new__bg {
+    height: 100vh;
+    width: 100vw;
+}
+
+.hello__div {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: 320px;
+    padding: 1rem;
+    margin-top: -40px;
+}
+
+.hello__svg {
+    fill: none;
+    stroke: #fff;
+    stroke-linecap: round;
+    stroke-miterlimit: 10;
+    stroke-width: 42px;
+    /* Adjusted stroke for smaller size */
+    stroke-dasharray: 5800px;
+    stroke-dashoffset: 5800px;
+    animation: anim__hello 3s linear forwards;
+    width: 100%;
+    overflow: visible;
+    /* Prevent cutting off stroke */
+}
+
+@keyframes anim__hello {
+    0% {
+        stroke-dashoffset: 5800;
+    }
+
+    25% {
+        stroke-dashoffset: 5800;
+    }
+
+    100% {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* A4-style policy document — SF / system stack, editorial rhythm */
+.commercial-policy-article {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    font-size: 0.8125rem;
+    line-height: 1.65;
+    letter-spacing: -0.011em;
+}
+
+@media (min-width: 640px) {
+    .commercial-policy-article {
+        font-size: 0.9375rem;
+        line-height: 1.68;
+        letter-spacing: -0.013em;
+    }
+}
+
+.commercial-policy-article .policy-section {
+    margin-top: 1.5rem;
+}
+
+.commercial-policy-article .policy-section:first-of-type {
+    margin-top: 0;
+}
+
+.commercial-policy-article h2 {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: rgb(10 10 10);
+    margin-bottom: 0.65rem;
+}
+
+@media (min-width: 640px) {
+    .commercial-policy-article h2 {
+        font-size: 0.875rem;
+    }
+}
+
+.commercial-policy-article p {
+    margin-bottom: 0.75rem;
+    color: rgb(38 38 38);
+}
+
+.commercial-policy-article p:last-child {
+    margin-bottom: 0;
+}
+
+.commercial-policy-article ul {
+    list-style: disc;
+    padding-left: 1.15rem;
+    margin: 0.5rem 0 0.85rem;
+    color: rgb(38 38 38);
+}
+
+.commercial-policy-article li {
+    margin-bottom: 0.0rem;
+    padding-left: 0.25rem;
+}
+
+.commercial-policy-article li::marker {
+    color: rgb(163 163 163);
+}
+
+.commercial-policy-article strong {
+    font-weight: 600;
+    color: rgb(23 23 23);
+}
+
+.policy-paper-scroll {
+    scrollbar-gutter: stable;
+}
+
+.policy-paper-scroll::-webkit-scrollbar {
+    width: 8px;
+}
+
+.policy-paper-scroll::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.policy-paper-scroll::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.12);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+.policy-paper-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.2);
+    background-clip: padding-box;
+}
