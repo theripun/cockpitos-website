@@ -138,3 +138,32 @@ body {
     background: rgba(0, 0, 0, 0.2);
     background-clip: padding-box;
 }
+
+.ios-dotted-spinner {
+    position: relative;
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    color: currentColor;
+    animation: ios-dotted-spinner-rotate 1s steps(12) infinite;
+}
+
+.ios-dotted-spinner__dot {
+    --dot-index: 0;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 3px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: calc(0.24 + (var(--dot-index) * 0.055));
+    transform: translate(-50%, -50%) rotate(calc(var(--dot-index) * 30deg)) translateY(-8.5px);
+    transform-origin: center;
+}
+
+@keyframes ios-dotted-spinner-rotate {
+    to {
+        transform: rotate(360deg);
+    }
+}

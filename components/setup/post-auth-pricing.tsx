@@ -228,6 +228,7 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
   const [currentPlanLabel, setCurrentPlanLabel] = useState("Free Plan");
   const [proLoading, setProLoading] = useState(false);
   const [modal, setModal] = useState<"free" | "pro" | null>(null);
+  const isPaidPlanSelected = currentPlanLabel !== "Free Plan";
 
   const selectPlan = useCallback((label: "Free Plan" | "Pro Plan") => {
     localStorage.setItem(SELECTED_PLAN_STORAGE_KEY, label);
@@ -235,15 +236,10 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
   }, []);
 
   const continueAfterFreeSelection = useCallback(() => {
+    if (isPaidPlanSelected) return;
     selectPlan("Free Plan");
     onContinueFree();
-  }, [onContinueFree, selectPlan]);
-
-  const handleContinuePro = useCallback(async () => {
-    if (proLoading) return;
-    selectPlan("Pro Plan");
-    setModal("pro");
-  }, [proLoading, selectPlan]);
+  }, [isPaidPlanSelected, onContinueFree, selectPlan]);
 
   const continueAfterProActivation = useCallback(async () => {
     if (proLoading) return;
@@ -256,6 +252,16 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
       setProLoading(false);
     }
   }, [onContinuePro, proLoading, selectPlan]);
+
+  const handleContinuePro = useCallback(async () => {
+    if (proLoading) return;
+    if (isPaidPlanSelected) {
+      await continueAfterProActivation();
+      return;
+    }
+    selectPlan("Pro Plan");
+    setModal("pro");
+  }, [continueAfterProActivation, isPaidPlanSelected, proLoading, selectPlan]);
 
   useEffect(() => {
     let cancelled = false;
@@ -354,14 +360,16 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
             <p className="text-[11px] text-white/45 mb-3">Limited trial experience.</p>
             <button
               type="button"
+              disabled={isPaidPlanSelected}
               onClick={() => {
+                if (isPaidPlanSelected) return;
                 selectPlan("Free Plan");
                 setModal("free");
               }}
-              className="w-full h-10 text-[13px] font-medium flex items-center justify-center gap-1.5 bg-white/5 border border-white/15 text-white hover:bg-white/10 rounded-none transition-colors"
+              className="w-full h-10 text-[13px] font-medium flex items-center justify-center gap-1.5 bg-white/5 border border-white/15 text-white hover:bg-white/10 rounded-none transition-colors disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35 disabled:hover:bg-white/[0.03]"
             >
-              Continue with Free
-              <ChevronRight className="w-4 h-4 opacity-90" />
+              {isPaidPlanSelected ? "Free unavailable on Pro" : "Continue with Free"}
+              {!isPaidPlanSelected ? <ChevronRight className="w-4 h-4 opacity-90" /> : null}
             </button>
           </article>
 
@@ -456,7 +464,7 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
                       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                       className="flex items-center justify-center gap-1.5"
                     >
-                      Activate Pro for Free
+                      {isPaidPlanSelected ? "Continue with Pro" : "Activate Pro for Free"}
                       <ChevronRight className="h-4 w-4 opacity-80" aria-hidden />
                     </motion.span>
                   )}
@@ -513,10 +521,11 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
                   <div className="mt-7 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <button
                       type="button"
+                      disabled={isPaidPlanSelected}
                       onClick={continueAfterFreeSelection}
-                      className="h-11 rounded-none border border-neutral-200 bg-white text-[14px] font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
+                      className="h-11 rounded-none border border-neutral-200 bg-white text-[14px] font-semibold text-neutral-700 transition-colors hover:bg-neutral-50 disabled:cursor-not-allowed disabled:border-neutral-200 disabled:bg-neutral-100 disabled:text-neutral-400"
                     >
-                      Continue free
+                      {isPaidPlanSelected ? "Pro is active" : "Continue free"}
                     </button>
                     <button
                       type="button"

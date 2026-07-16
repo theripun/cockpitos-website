@@ -15,12 +15,14 @@ type Phase = "hello" | "policy";
 
 const HELLO_MS = 3200;
 const SCROLL_END_EPS = 36;
+const SPINNER_DOTS = Array.from({ length: 12 }, (_, index) => index);
 
 export function Greetings({ onComplete }: { onComplete: () => void }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("hello");
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [accepting, setAccepting] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,16 +73,18 @@ export function Greetings({ onComplete }: { onComplete: () => void }) {
   const handlePolicyScroll = () => updateScrollEnd();
 
   const toggleAgreed = () => {
-    if (!scrolledToEnd) return;
+    if (!scrolledToEnd || accepting) return;
     setAgreed((v) => !v);
   };
 
   const handleAgree = () => {
-    if (!scrolledToEnd || !agreed) return;
+    if (!scrolledToEnd || !agreed || accepting) return;
+    setAccepting(true);
     onComplete();
   };
 
   const handleDecline = () => {
+    if (accepting) return;
     if (typeof window === "undefined") return;
     if (window.history.length > 1) {
       window.history.back();
@@ -156,8 +160,8 @@ export function Greetings({ onComplete }: { onComplete: () => void }) {
                     type="button"
                     role="checkbox"
                     aria-checked={agreed}
-                    aria-disabled={!scrolledToEnd}
-                    disabled={!scrolledToEnd}
+                    aria-disabled={!scrolledToEnd || accepting}
+                    disabled={!scrolledToEnd || accepting}
                     onClick={toggleAgreed}
                     className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-none border-2 border-neutral-900 bg-white transition-[opacity,transform] duration-200 enabled:active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 enabled:cursor-pointer"
                   >
@@ -189,15 +193,29 @@ export function Greetings({ onComplete }: { onComplete: () => void }) {
                   <button
                     type="button"
                     onClick={handleAgree}
-                    disabled={!scrolledToEnd || !agreed}
-                    className="order-1 w-full rounded-none bg-neutral-900 px-6 py-3 text-sm font-semibold text-white transition-[opacity,transform] hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-35 sm:order-none sm:flex-1"
+                    disabled={!scrolledToEnd || !agreed || accepting}
+                    aria-busy={accepting}
+                    className="order-1 flex min-h-11 w-full items-center justify-center rounded-none bg-neutral-900 px-6 py-3 text-sm font-semibold text-white transition-[opacity,transform] hover:opacity-90 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-35 sm:order-none sm:flex-1"
                   >
-                    Accept &amp; Continue
+                    {accepting ? (
+                      <span className="ios-dotted-spinner" aria-label="Continuing" role="status">
+                        {SPINNER_DOTS.map((dot) => (
+                          <span
+                            key={dot}
+                            className="ios-dotted-spinner__dot"
+                            style={{ "--dot-index": dot } as React.CSSProperties}
+                          />
+                        ))}
+                      </span>
+                    ) : (
+                      "Accept & Continue"
+                    )}
                   </button>
                   <button
                     type="button"
                     onClick={handleDecline}
-                    className="w-full rounded-none bg-white px-6 py-3 text-sm font-semibold text-neutral-800 underline decoration-neutral-800 underline-offset-4 transition-opacity hover:opacity-70 active:scale-[0.99] sm:flex-1"
+                    disabled={accepting}
+                    className="w-full rounded-none bg-white px-6 py-3 text-sm font-semibold text-neutral-800 underline decoration-neutral-800 underline-offset-4 transition-opacity hover:opacity-70 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-45 sm:flex-1"
                   >
                     Decline &amp; Exit Setup
                   </button>
