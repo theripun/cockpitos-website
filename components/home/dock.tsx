@@ -3,23 +3,29 @@
 import { GlassInterface } from "@/components/common/glass-interface";
 import "@/components/common/styles/glass-interface.css";
 import {
+    CalendarCheck2,
+    Folder,
+    BadgeInfo,
     ExternalLink,
+    Gauge,
+    Globe,
+    Images,
+    MonitorCog,
+    Search,
+    Settings,
+    Shield,
+    UserCircle,
     X,
 } from "lucide-react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-    SiGoogle,
-    SiBrave
-} from "@icons-pack/react-simple-icons";
-import { FaChartSimple, FaCircleInfo, FaCircleUser, FaGear } from "react-icons/fa6";
 import { useState, type ComponentType } from "react";
 
 const systemApps = [
-    { icon: "/apps/terminal.svg", label: "Terminal" },
-    { icon: "/apps/explorer.svg", label: "Explorer" },
-    { icon: FaChartSimple, label: "Task Monitor" },
-    { icon: "/apps/manager.svg", label: "Device Manager" },
+    { icon: "/apps/terminal.svg", label: "Terminal", keepImage: true },
+    { icon: Folder, label: "Explorer", tileClassName: "bg-transparent", iconClassName: "fill-white text-white" },
+    { icon: Gauge, label: "Task Monitor", tileClassName: "bg-transparent", iconClassName: "fill-white/20 text-white" },
+    { icon: MonitorCog, label: "Device Manager", tileClassName: "bg-transparent", iconClassName: "fill-white/10 text-white" },
 ];
 
 // const commsApps = [
@@ -28,14 +34,14 @@ const systemApps = [
 // ];
 
 const personalApps = [
-    { icon: "/apps/calendar.svg", label: "Calendar" },
-    { icon: FaCircleUser, label: "Account" },
-    { icon: "/apps/photos.svg", label: "Photos" },
+    { icon: CalendarCheck2, label: "Calendar", tileClassName: "bg-transparent", iconClassName: "fill-white/10 text-white" },
+    { icon: UserCircle, label: "Account", tileClassName: "bg-transparent", iconClassName: "fill-white text-white" },
+    { icon: Images, label: "Photos", tileClassName: "bg-transparent", iconClassName: "fill-white/10 text-white" },
 ];
 
 const webApps = [
-    { icon: SiBrave, label: "Brave", url: "https://search.brave.com/" },
-    { icon: SiGoogle, label: "Google", url: "https://google.com" },
+    { icon: Shield, label: "Brave", url: "https://search.brave.com/", tileClassName: "bg-transparent", iconClassName: "fill-white text-white" },
+    { icon: Search, label: "Google", url: "https://google.com", tileClassName: "bg-transparent", iconClassName: "text-white" },
 ];
 
 export interface DockProps {
@@ -81,9 +87,10 @@ export function Dock({ onAppClick, activeApps = [] }: DockProps) {
                 >
                     <div className="flex items-end gap-2">
                         <DockItem
-                            icon={FaCircleInfo}
+                            icon={BadgeInfo}
                             label="System Info"
-                            iconClassName="text-white"
+                            tileClassName="bg-transparent"
+                            iconClassName="fill-white/10 text-white"
                             onClick={() => onAppClick?.("Finder")}
                             isActive={activeApps.includes("Finder")}
                         />
@@ -95,6 +102,9 @@ export function Dock({ onAppClick, activeApps = [] }: DockProps) {
                                 key={`sys-${index}`}
                                 icon={item.icon}
                                 label={item.label}
+                                tileClassName={item.tileClassName}
+                                iconClassName={item.iconClassName}
+                                keepImage={item.keepImage}
                                 onClick={() => onAppClick?.(item.label)}
                                 isActive={activeApps.includes(item.label)}
                             />
@@ -107,6 +117,8 @@ export function Dock({ onAppClick, activeApps = [] }: DockProps) {
                                 key={`pers-${index}`}
                                 icon={item.icon}
                                 label={item.label}
+                                tileClassName={item.tileClassName}
+                                iconClassName={item.iconClassName}
                                 onClick={() => onAppClick?.(item.label)}
                                 isActive={activeApps.includes(item.label)}
                             />
@@ -119,6 +131,8 @@ export function Dock({ onAppClick, activeApps = [] }: DockProps) {
                                 key={`web-${index}`}
                                 icon={item.icon}
                                 label={item.label}
+                                tileClassName={item.tileClassName}
+                                iconClassName={item.iconClassName}
                                 onClick={() => handleBrowserClick(item.label, item.url || "")}
                                 isActive={activeApps.includes(item.label)}
                             />
@@ -127,8 +141,10 @@ export function Dock({ onAppClick, activeApps = [] }: DockProps) {
                         <DockDivider />
 
                         <DockItem
-                            icon={FaGear}
+                            icon={Settings}
                             label="Settings"
+                            tileClassName="bg-transparent"
+                            iconClassName="fill-white/20 text-white"
                             onClick={() => onAppClick?.("Settings")}
                             isActive={activeApps.includes("Settings")}
                         />
@@ -217,13 +233,17 @@ function DockDivider() {
 function DockItem({
     icon: Icon,
     label,
+    tileClassName = "bg-indigo-500",
     iconClassName = "",
+    keepImage = false,
     onClick,
     isActive,
 }: {
     icon: ComponentType<{ className?: string }> | string;
     label: string;
+    tileClassName?: string;
     iconClassName?: string;
+    keepImage?: boolean;
     onClick?: () => void;
     isActive?: boolean;
 }) {
@@ -242,16 +262,27 @@ function DockItem({
                     isActive ? "bg-white/[0.18] ring-1 ring-white/25" : "",
                 ].join(" ")}
             >
-                {typeof Icon === "string" ? (
+                {typeof Icon === "string" && keepImage ? (
                     <Image src={Icon} alt={label} width={40} height={40} className="h-10 w-10" />
                 ) : (
-                    <Icon
-                        className={
-                            iconClassName
-                                ? `h-7 w-7 transition-colors duration-200 ${iconClassName}`
-                                : "h-7 w-7 text-white/90 transition-colors duration-200 group-hover:text-white"
-                        }
-                    />
+                    <div
+                        className={[
+                            "flex h-full w-full items-center justify-center rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]",
+                            tileClassName,
+                        ].join(" ")}
+                    >
+                        {typeof Icon === "string" ? (
+                            <Globe className="h-7 w-7 fill-white/20 text-white transition-colors duration-200" />
+                        ) : (
+                            <Icon
+                                className={
+                                    iconClassName
+                                        ? `h-7 w-7 transition-colors duration-200 ${iconClassName}`
+                                        : "h-7 w-7 fill-white/20 text-white transition-colors duration-200 group-hover:text-white"
+                                }
+                            />
+                        )}
+                    </div>
                 )}
             </div>
 

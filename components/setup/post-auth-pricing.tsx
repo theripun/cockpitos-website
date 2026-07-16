@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
 import { BASE_URL } from "@/lib/baseURL";
+import { getCurrentPlanLabel, type PlanUser } from "@/lib/plan-access";
 
 type PostAuthPricingProps = {
   onContinueFree: () => void;
@@ -14,6 +15,7 @@ const PRO_MONTHLY_USD = 19;
 const PRO_PROMO_PRICE = 0;
 const OFFER_STORAGE_KEY = "cockpit_welcome80_offer_deadline";
 const OFFER_DURATION_MS = 12 * 60 * 60 * 1000;
+const SELECTED_PLAN_STORAGE_KEY = "cockpit_selected_plan_label";
 
 function formatUsd(n: number) {
   return n.toLocaleString("en-US", {
@@ -203,20 +205,49 @@ function PromoHero({
   );
 }
 
+function hasExplicitPlanData(user: PlanUser) {
+  if (!user || typeof user !== "object") return false;
+
+  return [
+    "plan",
+    "planName",
+    "subscriptionPlan",
+    "subscriptionTier",
+    "tier",
+    "subscriptionStatus",
+    "planStatus",
+    "billingStatus",
+    "status",
+  ].some((key) => typeof user[key] === "string" && user[key].trim().length > 0);
+}
+
 export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPricingProps) {
   const { ready } = useWelcomeOfferCountdown();
   const active = ready;
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [currentPlanLabel, setCurrentPlanLabel] = useState("Free Plan");
   const [proLoading, setProLoading] = useState(false);
   const [modal, setModal] = useState<"free" | "pro" | null>(null);
 
+  const selectPlan = useCallback((label: "Free Plan" | "Pro Plan") => {
+    localStorage.setItem(SELECTED_PLAN_STORAGE_KEY, label);
+    setCurrentPlanLabel(label);
+  }, []);
+
+  const continueAfterFreeSelection = useCallback(() => {
+    selectPlan("Free Plan");
+    onContinueFree();
+  }, [onContinueFree, selectPlan]);
+
   const handleContinuePro = useCallback(async () => {
     if (proLoading) return;
+    selectPlan("Pro Plan");
     setModal("pro");
-  }, [proLoading]);
+  }, [proLoading, selectPlan]);
 
   const continueAfterProActivation = useCallback(async () => {
     if (proLoading) return;
+    selectPlan("Pro Plan");
     setProLoading(true);
     try {
       await Promise.resolve(onContinuePro());
@@ -224,22 +255,34 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
       console.error(e);
       setProLoading(false);
     }
-  }, [onContinuePro, proLoading]);
+  }, [onContinuePro, proLoading, selectPlan]);
 
   useEffect(() => {
     let cancelled = false;
+    const restoreId = window.setTimeout(() => {
+      if (cancelled) return;
+      const storedPlanLabel = localStorage.getItem(SELECTED_PLAN_STORAGE_KEY);
+      if (storedPlanLabel) setCurrentPlanLabel(storedPlanLabel);
+    }, 0);
+
     (async () => {
       try {
         const res = await fetch(`${BASE_URL}/auth/me`, { credentials: "include" });
         if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { email?: string };
+        const data = (await res.json()) as PlanUser & { email?: string };
         if (typeof data?.email === "string" && !cancelled) setUserEmail(data.email);
+        if (!cancelled && hasExplicitPlanData(data)) {
+          const label = getCurrentPlanLabel(data);
+          localStorage.setItem(SELECTED_PLAN_STORAGE_KEY, label);
+          setCurrentPlanLabel(label);
+        }
       } catch {
         /* ignore */
       }
     })();
     return () => {
       cancelled = true;
+      window.clearTimeout(restoreId);
     };
   }, []);
 
@@ -265,20 +308,30 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
         }`}
       >
         <header className="px-6 py-4 border-b border-white/10">
-          <h1 className="text-base font-semibold text-white tracking-tight">Select a Plan</h1>
-          <p className="mt-1 text-[13px] leading-snug">
-            {userEmail ? (
-              <>
-                <span className="text-white/55">You&apos;re signed in as </span>
-                <span className="font-semibold text-white break-all">{userEmail}</span>
-                <span className="text-white/55">. Pick a tier to continue.</span>
-              </>
-            ) : (
-              <span className="text-white/55">
-                You&apos;re signed in. Pick a tier to continue.
-              </span>
-            )}
-          </p>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h1 className="text-base font-semibold text-white tracking-tight">Select a Plan</h1>
+              <p className="mt-1 text-[13px] leading-snug">
+                {userEmail ? (
+                  <>
+                    <span className="text-white/55">You&apos;re signed in as </span>
+                    <span className="font-semibold text-white break-all">{userEmail}</span>
+                    <span className="text-white/55">. Pick a tier to continue.</span>
+                  </>
+                ) : (
+                  <span className="text-white/55">
+                    You&apos;re signed in. Pick a tier to continue.
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="shrink-0 rounded-none border border-white/15 bg-white/[0.06] px-3 py-2 text-left sm:text-right">
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+                Current plan
+              </p>
+              <p className="mt-0.5 text-[13px] font-semibold text-white">{currentPlanLabel}</p>
+            </div>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-white/10">
@@ -301,7 +354,10 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
             <p className="text-[11px] text-white/45 mb-3">Limited trial experience.</p>
             <button
               type="button"
-              onClick={() => setModal("free")}
+              onClick={() => {
+                selectPlan("Free Plan");
+                setModal("free");
+              }}
               className="w-full h-10 text-[13px] font-medium flex items-center justify-center gap-1.5 bg-white/5 border border-white/15 text-white hover:bg-white/10 rounded-none transition-colors"
             >
               Continue with Free
@@ -457,14 +513,17 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
                   <div className="mt-7 grid grid-cols-1 gap-2 sm:grid-cols-2">
                     <button
                       type="button"
-                      onClick={() => setModal(null)}
+                      onClick={continueAfterFreeSelection}
                       className="h-11 rounded-none border border-neutral-200 bg-white text-[14px] font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
                     >
-                      Review plans
+                      Continue free
                     </button>
                     <button
                       type="button"
-                      onClick={() => setModal("pro")}
+                      onClick={() => {
+                        selectPlan("Pro Plan");
+                        setModal("pro");
+                      }}
                       className="h-11 rounded-none bg-black text-[14px] font-semibold text-white transition-colors hover:bg-neutral-900"
                     >
                       Get Pro free

@@ -16,6 +16,7 @@ import {
     readStoredCheckoutRegionSlug,
     storeCheckoutRegionSlug,
 } from "@/lib/checkout-region";
+import { shouldShowPricingForUser } from "@/lib/plan-access";
 
 type SetupDevice = {
     id: string;
@@ -25,21 +26,28 @@ type SetupDevice = {
     status?: string;
 };
 
+async function fetchCurrentUserPlan() {
+    try {
+        const res = await fetch(`${BASE_URL}/auth/me`, { credentials: "include" });
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
+    }
+}
+
 export default function SetupPage() {
     const [stage, setStage] = React.useState<'greetings' | 'login' | 'pricing' | 'setup' | 'device-selection'>('greetings');
     const [hasSession, setHasSession] = React.useState(false);
     const [devices, setDevices] = React.useState<SetupDevice[]>([]);
 
+    const goHome = React.useCallback(() => {
+        window.location.replace('/home');
+    }, []);
+
     React.useEffect(() => {
         const checkSession = async () => {
             try {
-                // Check if reload happened
-                const entries = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
-                if (entries.length > 0 && entries[0].type === "reload") {
-                    await fetch(`${BASE_URL}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => { });
-                    return;
-                }
-
                 const res = await fetch(`${BASE_URL}/cockpit/vps`, { credentials: "include" });
                 if (res.ok) {
                     setHasSession(true);
@@ -55,25 +63,32 @@ export default function SetupPage() {
     }, []);
 
     const handleGreetingComplete = () => {
+        void (async () => {
         if (hasSession) {
+            const user = await fetchCurrentUserPlan();
+            if (shouldShowPricingForUser(user)) {
+                setStage("pricing");
+                return;
+            }
             // Check for devices if session exists
             if (devices.length > 0) {
-                setStage('device-selection');
+                goHome();
             } else {
                 setStage('setup');
             }
         } else {
             setStage('login');
         }
+        })();
     };
 
     const proceedAfterPricing = useCallback(() => {
         if (devices.length > 0) {
-            setStage("device-selection");
+            goHome();
         } else {
             setStage("setup");
         }
-    }, [devices.length]);
+    }, [devices.length, goHome]);
 
     const goToCheckout = useCallback(async () => {
         let slug = readStoredCheckoutRegionSlug();
@@ -93,7 +108,14 @@ export default function SetupPage() {
                 const data = await res.json();
                 const devicesList = Array.isArray(data) ? data as SetupDevice[] : [];
                 setDevices(devicesList);
-                setStage("pricing");
+                const user = await fetchCurrentUserPlan();
+                if (shouldShowPricingForUser(user)) {
+                    setStage("pricing");
+                } else if (devicesList.length > 0) {
+                    goHome();
+                } else {
+                    setStage("setup");
+                }
             } else {
                 // Fallback if fetch fails but login succeeded (shouldn't happen often)
                 setStage('setup');
@@ -107,7 +129,7 @@ export default function SetupPage() {
     const handleDeviceSelect = () => {
         // Here we could store the selected device ID in local storage or context if needed
         // For now, assume /home handles default or stored state
-        window.location.href = '/home';
+        goHome();
     };
 
     return (

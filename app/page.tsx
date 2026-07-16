@@ -17,6 +17,7 @@ import {
   readStoredCheckoutRegionSlug,
   storeCheckoutRegionSlug,
 } from "@/lib/checkout-region";
+import { shouldShowPricingForUser } from "@/lib/plan-access";
 
 type SetupDevice = {
   id: string;
@@ -25,6 +26,16 @@ type SetupDevice = {
   username: string;
   status?: string;
 };
+
+async function fetchCurrentUserPlan() {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/me`, { credentials: "include" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
 
 function HomeContent() {
   const router = useRouter();
@@ -38,7 +49,12 @@ function HomeContent() {
   const skipGreetings = isConfigure || isDevices || isSignin || isPricing;
 
   const [stage, setStage] = React.useState<'loading' | 'greetings' | 'login' | 'pricing' | 'setup' | 'device-selection'>(skipGreetings ? 'loading' : 'greetings');
+  const [musicReady, setMusicReady] = React.useState(skipGreetings);
   const [devices, setDevices] = React.useState<SetupDevice[]>([]);
+
+  const goHome = React.useCallback(() => {
+    window.location.replace('/home');
+  }, []);
 
   React.useEffect(() => {
     const checkSession = async () => {
@@ -51,16 +67,29 @@ function HomeContent() {
               const devs = Array.isArray(data) ? data as SetupDevice[] : [];
               setDevices(devs);
 
+              if (devs.length > 0 && (isConfigure || isDevices)) {
+                goHome();
+                return;
+              }
+
               if (isConfigure) {
                 setStage('setup');
               } else if (isDevices) {
-                if (devs.length > 0) setStage('device-selection');
-                else setStage('setup');
+                setStage('setup');
               } else if (isSignin) {
-                window.location.replace('/home');
+                goHome();
                 return;
               } else if (isPricing) {
-                setStage('pricing');
+                const user = await fetchCurrentUserPlan();
+                if (shouldShowPricingForUser(user)) {
+                  setStage('pricing');
+                } else if (devs.length > 0) {
+                  goHome();
+                  return;
+                } else {
+                  setStage('setup');
+                  router.replace(`/${readStoredCheckoutRegionSlug() ?? "in"}?configure=true`, { scroll: false });
+                }
               } else {
                 setStage('login');
               }
@@ -70,13 +99,6 @@ function HomeContent() {
           } catch {
             setStage('login');
           }
-          return;
-        }
-
-        // Check if reload happened
-        const entries = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
-        if (entries.length > 0 && entries[0].type === "reload") {
-          await fetch(`${BASE_URL}/auth/logout`, { method: "POST", credentials: "include" }).catch(() => { });
           return;
         }
 
@@ -91,7 +113,7 @@ function HomeContent() {
     };
 
     checkSession();
-  }, [isConfigure, isDevices, isSignin, isPricing, skipGreetings]);
+  }, [goHome, isConfigure, isDevices, isSignin, isPricing, router, skipGreetings]);
 
   React.useEffect(() => {
     if (!skipGreetings) return;
@@ -125,21 +147,28 @@ function HomeContent() {
         const data = await res.json();
         const devs = Array.isArray(data) ? data : [];
         setDevices(devs);
+        const user = await fetchCurrentUserPlan();
+        const shouldShowPricing = shouldShowPricingForUser(user);
 
         const p = new URLSearchParams();
-        if (isConfigure) {
+        if (shouldShowPricing && !isConfigure) {
+          p.set("pricing", "true");
+        } else if (isConfigure) {
           p.set("configure", "true");
         } else if (devs.length > 0) {
-          p.set("devices", "true");
+          goHome();
+          return;
         } else {
           p.set("configure", "true");
         }
         router.replace(`/${slug}?${p.toString()}`, { scroll: false });
 
-        if (isConfigure) {
+        if (shouldShowPricing && !isConfigure) {
+          setStage("pricing");
+        } else if (isConfigure) {
           setStage("setup");
         } else if (devs.length > 0) {
-          setStage("device-selection");
+          goHome();
         } else {
           setStage("setup");
         }
@@ -153,7 +182,7 @@ function HomeContent() {
       setDevices([]);
       setStage("login");
     }
-  }, [isConfigure, router]);
+  }, [goHome, isConfigure, router]);
 
   const proceedAfterPricing = React.useCallback(() => {
     void (async () => {
@@ -163,14 +192,13 @@ function HomeContent() {
         storeCheckoutRegionSlug(slug);
       }
       if (devices.length > 0 && !isConfigure) {
-        router.replace(`/${slug}?devices=true`, { scroll: false });
-        setStage("device-selection");
+        goHome();
       } else {
         router.replace(`/${slug}?configure=true`, { scroll: false });
         setStage("setup");
       }
     })();
-  }, [devices.length, isConfigure, router]);
+  }, [devices.length, goHome, isConfigure, router]);
 
   const handleLoginSuccess = async () => {
     try {
@@ -184,8 +212,16 @@ function HomeContent() {
           slug = await detectCheckoutRegionSlug();
           storeCheckoutRegionSlug(slug);
         }
-        router.replace(`/${slug}?pricing=true`, { scroll: false });
-        setStage("pricing");
+        const user = await fetchCurrentUserPlan();
+        if (shouldShowPricingForUser(user)) {
+          router.replace(`/${slug}?pricing=true`, { scroll: false });
+          setStage("pricing");
+        } else if (devicesList.length > 0) {
+          goHome();
+        } else {
+          router.replace(`/${slug}?configure=true`, { scroll: false });
+          setStage("setup");
+        }
       } else {
         setStage('setup');
       }
@@ -213,7 +249,7 @@ function HomeContent() {
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/wallpaper/63.jpg"
+          src="/wallpaper/67.jpg"
           alt="Setup Background"
           fill
           priority
@@ -226,7 +262,7 @@ function HomeContent() {
 
       {/* Background Animation */}
       <AnimatePresence>
-        {stage === 'greetings' && (
+        {stage === 'greetings' && musicReady && (
           <motion.div
             initial={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 1.1, filter: "blur(20px)" }}
@@ -244,6 +280,8 @@ function HomeContent() {
         showSystemMonitor={false}
         showSearch={false}
         transparent={true}
+        showMusicExperience
+        onMusicExperienceReady={() => setMusicReady(true)}
       />
 
       {/* Main Content Area — must not sit above greetings (z-10) when empty or it steals wheel/touch */}

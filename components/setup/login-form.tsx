@@ -155,11 +155,7 @@ export function LoginForm({ onSuccess }: { onSuccess: () => void }) {
             const data = await res.json();
 
             if (data.ok) {
-                setLoginData(prev => ({ ...prev, username: signupData.username }));
-                setMode('login');
-                setSuccess("Account created successfully. Please sign in.");
-                setSignupStep(1);
-                setSignupData(prev => ({ ...prev, password: "", userId: "", otp: "" }));
+                onSuccess();
             } else {
                 setError(data.message || "Failed to set password");
             }

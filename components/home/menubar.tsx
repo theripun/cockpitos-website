@@ -41,6 +41,10 @@ import {
     ToggleRight,
     LucidePuzzle,
     Puzzle,
+    Music2,
+    Volume2,
+    VolumeX,
+    Maximize2,
 } from "lucide-react";
 import { LiquidGlass } from "@/components/common/liquid-glass";
 import { BASE_URL } from "@/lib/baseURL";
@@ -58,6 +62,8 @@ interface MenubarProps {
     transparent?: boolean;
     /** Shimmer plan chip — only desktop `/home`; hidden on setup, login, reset-password, etc. */
     showPlanBadge?: boolean;
+    showMusicExperience?: boolean;
+    onMusicExperienceReady?: () => void;
 }
 
 interface MenuItem {
@@ -80,6 +86,8 @@ export function Menubar({
     showSearch = true,
     transparent = false,
     showPlanBadge = false,
+    showMusicExperience = false,
+    onMusicExperienceReady,
 }: MenubarProps) {
     const [time, setTime] = useState<Date | null>(null);
     const [isOnline, setIsOnline] = useState(true);
@@ -94,6 +102,10 @@ export function Menubar({
     });
 
     const [showDropdown, setShowDropdown] = useState(false);
+    const [showMusicDropdown, setShowMusicDropdown] = useState(false);
+    const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
+    const [musicStatus, setMusicStatus] = useState<"checking" | "prompt" | "playing" | "paused" | "denied">("checking");
+    const [musicExperienceReady, setMusicExperienceReady] = useState(!showMusicExperience);
     const [activeMenu, setActiveMenu] = useState<string | null>(null);
 
     const [cpuUsage, setCpuUsage] = useState(0);
@@ -153,6 +165,10 @@ export function Menubar({
 
     const dropdownRef = React.useRef<HTMLDivElement>(null);
     const buttonRef = React.useRef<HTMLButtonElement>(null);
+    const musicDropdownRef = React.useRef<HTMLDivElement>(null);
+    const musicButtonRef = React.useRef<HTMLButtonElement>(null);
+    const musicAudioRef = React.useRef<HTMLAudioElement | null>(null);
+    const musicReadyCallbackRef = React.useRef(onMusicExperienceReady);
 
     // NOTE: menuRefs are kept but we no longer use them to close menus,
     // because portal menus are not inside these refs.
@@ -163,6 +179,104 @@ export function Menubar({
 
     // Used to ignore outside-click closing when clicking INSIDE portal menus.
     const PORTAL_MENU_CLASS = "cockpit-portal-menu";
+
+    useEffect(() => {
+        musicReadyCallbackRef.current = onMusicExperienceReady;
+    }, [onMusicExperienceReady]);
+
+    const finishMusicExperience = React.useCallback(() => {
+        setMusicExperienceReady(true);
+        musicReadyCallbackRef.current?.();
+    }, []);
+
+    const openMusicPrompt = React.useCallback(() => {
+        setMusicStatus("prompt");
+        setShowMusicDropdown(true);
+    }, []);
+
+    const playMusic = React.useCallback(async () => {
+        const audio = musicAudioRef.current;
+        if (!audio) return false;
+
+        try {
+            await audio.play();
+            setMusicStatus("playing");
+            localStorage.setItem("cockpit_music_experience", "allowed");
+            finishMusicExperience();
+            return true;
+        } catch {
+            openMusicPrompt();
+            return false;
+        }
+    }, [finishMusicExperience, openMusicPrompt]);
+
+    const continueToMusicExperience = React.useCallback(() => {
+        setShowFullscreenPrompt(false);
+        const savedPreference = localStorage.getItem("cockpit_music_experience");
+        if (savedPreference === "allowed") {
+            void playMusic();
+        } else {
+            openMusicPrompt();
+        }
+    }, [openMusicPrompt, playMusic]);
+
+    const handleEnterFullscreen = React.useCallback(async () => {
+        try {
+            if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+            }
+        } catch (err) {
+            console.error("Error attempting to enable fullscreen:", err);
+        } finally {
+            continueToMusicExperience();
+        }
+    }, [continueToMusicExperience]);
+
+    useEffect(() => {
+        if (!showMusicExperience) {
+            finishMusicExperience();
+            return;
+        }
+
+        const audio = new Audio("/music/new-intro.mp3");
+        audio.loop = true;
+        audio.volume = 0.36;
+        audio.preload = "auto";
+        musicAudioRef.current = audio;
+
+        setShowFullscreenPrompt(true);
+
+        return () => {
+            audio.pause();
+            audio.src = "";
+            musicAudioRef.current = null;
+        };
+    }, [finishMusicExperience, showMusicExperience]);
+
+    const handleAllowMusic = async () => {
+        const started = await playMusic();
+        if (started) setShowMusicDropdown(false);
+    };
+
+    const handleContinueWithoutMusic = () => {
+        musicAudioRef.current?.pause();
+        setMusicStatus("denied");
+        setShowMusicDropdown(false);
+        finishMusicExperience();
+    };
+
+    const handleMusicToggle = async () => {
+        const audio = musicAudioRef.current;
+        if (!audio) return;
+
+        if (musicStatus === "playing") {
+            audio.pause();
+            setMusicStatus("paused");
+            return;
+        }
+
+        await handleAllowMusic();
+    };
 
 
 
@@ -176,6 +290,7 @@ export function Menubar({
     const closeAllMenus = () => {
         setActiveMenu(null);
         setShowDropdown(false);
+        if (musicExperienceReady) setShowMusicDropdown(false);
     };
 
     // Real-time internet speed detection - downloads actual data to measure true bandwidth
@@ -579,12 +694,14 @@ export function Menubar({
 
             // If clicking inside system dropdown, do nothing
             if (showDropdown && dropdownRef.current && dropdownRef.current.contains(event.target as Node)) return;
+            if (showMusicDropdown && musicDropdownRef.current && musicDropdownRef.current.contains(event.target as Node)) return;
 
             // If clicking the activity button itself, do nothing (toggle handles it)
             if (buttonRef.current && buttonRef.current.contains(event.target as Node)) return;
+            if (musicButtonRef.current && musicButtonRef.current.contains(event.target as Node)) return;
 
             // Otherwise close any open menus
-            if (activeMenu || showDropdown) closeAllMenus();
+            if (activeMenu || showDropdown || (showMusicDropdown && musicExperienceReady)) closeAllMenus();
         };
 
         document.addEventListener("click", handleClickOutside);
@@ -595,7 +712,7 @@ export function Menubar({
             window.removeEventListener("offline", handleOffline);
             document.removeEventListener("click", handleClickOutside);
         };
-    }, [activeMenu, showDropdown]);
+    }, [activeMenu, showDropdown, showMusicDropdown, musicExperienceReady]);
 
     const formatTime = (date: Date) => {
         return date.toLocaleTimeString("en-US", {
@@ -618,6 +735,14 @@ export function Menubar({
         setShowDropdown((v) => !v);
         // if opening system dropdown, close the top menus
         setActiveMenu(null);
+        if (musicExperienceReady) setShowMusicDropdown(false);
+    };
+
+    const toggleMusicDropdown = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setShowMusicDropdown((v) => !v);
+        setActiveMenu(null);
+        setShowDropdown(false);
     };
 
     const toggleMenu = (menu: string, e: React.MouseEvent) => {
@@ -796,7 +921,7 @@ export function Menubar({
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/35 to-transparent animate-shimmer" />
                             </div>
                             <span className="relative z-[1] text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-50/95">
-                                Paid Plan
+                                Pro Plan
                             </span>
                         </div>
                     </>
@@ -879,6 +1004,28 @@ export function Menubar({
 
             <div className="flex items-center gap-4">
                 <div className="flex items-center gap-3 mr-2">
+                    {showMusicExperience && (
+                        <button
+                            ref={musicButtonRef}
+                            type="button"
+                            onClick={toggleMusicDropdown}
+                            className={`flex items-center gap-1 hover:bg-white/10 px-1.5 py-0.5 rounded transition-colors ${
+                                showMusicDropdown ? "bg-white/10 text-white" : "text-white/90 hover:text-white"
+                            }`}
+                            title="Music experience"
+                            aria-label="Music experience"
+                            aria-expanded={showMusicDropdown}
+                        >
+                            {musicStatus === "playing" ? (
+                                <Volume2 className="w-3.5 h-3.5" />
+                            ) : musicStatus === "denied" || musicStatus === "paused" ? (
+                                <VolumeX className="w-3.5 h-3.5" />
+                            ) : (
+                                <Music2 className="w-3.5 h-3.5" />
+                            )}
+                        </button>
+                    )}
+
                     {/* Internet Speed Indicator */}
                     <div className="flex items-center gap-1.5 hover:bg-white/10 px-2 py-0.5 rounded transition-colors cursor-default">
                         {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5 text-red-400" />}
@@ -1067,6 +1214,108 @@ export function Menubar({
                             </div>
 
                         </LiquidGlass>
+                    </div>,
+                    document.body
+                )}
+            {showMusicExperience &&
+                showFullscreenPrompt &&
+                createPortal(
+                    <div className="fixed right-4 top-12 z-[10000] w-[320px] bg-white text-neutral-950 shadow-2xl">
+                        <div className="border-b border-neutral-200 px-5 py-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <div className="text-sm font-semibold">Fullscreen Experience</div>
+                                    <div className="mt-1 text-xs leading-relaxed text-neutral-500">
+                                        Use CockpitOS in fullscreen before starting the music experience.
+                                    </div>
+                                </div>
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-neutral-950 text-white">
+                                    <Maximize2 className="h-4 w-4" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 px-5 py-4">
+                            <button
+                                type="button"
+                                onClick={() => void handleEnterFullscreen()}
+                                className="w-full bg-neutral-950 px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                            >
+                                Go Full Screen
+                            </button>
+                            <button
+                                type="button"
+                                onClick={continueToMusicExperience}
+                                className="w-full border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-900 transition-colors hover:bg-neutral-100"
+                            >
+                                Continue Without Fullscreen
+                            </button>
+                        </div>
+                    </div>,
+                    document.body
+                )}
+            {showMusicExperience &&
+                showMusicDropdown &&
+                createPortal(
+                    <div
+                        ref={musicDropdownRef}
+                        className="fixed right-4 top-12 z-[10000] w-[320px] bg-white text-neutral-950 shadow-2xl"
+                    >
+                        <div className="border-b border-neutral-200 px-5 py-4">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <div className="text-sm font-semibold">Music Experience</div>
+                                    <div className="mt-1 text-xs leading-relaxed text-neutral-500">
+                                        {musicStatus === "playing"
+                                            ? "Ambient setup music is playing."
+                                            : musicStatus === "paused"
+                                              ? "Music is paused for this session."
+                                              : "Turn on the music experience and feel the platform come alive."}
+                                    </div>
+                                </div>
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center bg-neutral-950 text-white">
+                                    <Music2 className="h-4 w-4" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3 px-5 py-4">
+                            {musicStatus === "prompt" || musicStatus === "checking" ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleAllowMusic()}
+                                        className="w-full bg-neutral-950 px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                                    >
+                                        Allow Music
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleContinueWithoutMusic}
+                                        className="w-full border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-900 transition-colors hover:bg-neutral-100"
+                                    >
+                                        Continue Without Music
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleMusicToggle()}
+                                        className="w-full bg-neutral-950 px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                                    >
+                                        {musicStatus === "playing" ? "Pause Music" : "Play Music"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowMusicDropdown(false)}
+                                        className="w-full border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-900 transition-colors hover:bg-neutral-100"
+                                    >
+                                        Close
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>,
                     document.body
                 )}

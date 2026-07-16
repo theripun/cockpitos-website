@@ -470,6 +470,7 @@ export default function HomePage() {
                 {/* Menubar */}
                 <Menubar
                     showPlanBadge
+                    showMusicExperience
                     onCalendarClick={() => {
                         const countsTowardVignette =
                             !isCalendarOpen || minimizedApps.includes("Calendar");
