@@ -79,6 +79,13 @@ function statusLabel(device: DeviceItem["device"]): {
     dot: string;
     pill: string;
 } {
+    if (device.status !== "disabled" && isOnline(device.lastSeenAt))
+        return {
+            label: "Online",
+            color: "text-[#30d158]",
+            dot: "bg-[#30d158]",
+            pill: "bg-[#30d158]/14",
+        };
     if (device.status === "enrolling")
         return {
             label: "Enrolling",
@@ -92,13 +99,6 @@ function statusLabel(device: DeviceItem["device"]): {
             color: "text-white/35",
             dot: "bg-white/35",
             pill: "bg-white/[0.06]",
-        };
-    if (isOnline(device.lastSeenAt))
-        return {
-            label: "Online",
-            color: "text-[#30d158]",
-            dot: "bg-[#30d158]",
-            pill: "bg-[#30d158]/14",
         };
     return {
         label: "Offline",
@@ -150,6 +150,7 @@ export function DeviceManager({ isOpen, onClose, onMinimize }: DeviceManagerProp
         try {
             const res = await fetch(`${BASE_URL}/cockpit/cocktail/devices`, {
                 credentials: "include",
+                cache: "no-store",
             });
             if (!res.ok) throw new Error(`Server error: ${res.status}`);
             const data = await res.json();
@@ -564,7 +565,7 @@ export function DeviceManager({ isOpen, onClose, onMinimize }: DeviceManagerProp
                                 ? "Updating list…"
                                 : devices.length === 0
                                   ? "No devices connected"
-                                  : `${devices.length} registered · ${devices.filter(d => isOnline(d.device.lastSeenAt) && d.device.status !== "enrolling" && d.device.status !== "disabled").length} online`}
+                                  : `${devices.length} registered · ${devices.filter(d => isOnline(d.device.lastSeenAt) && d.device.status !== "disabled").length} online`}
                         </p>
                     </div>
 
@@ -639,7 +640,6 @@ export function DeviceManager({ isOpen, onClose, onMinimize }: DeviceManagerProp
                                         const { label, color, dot, pill } = statusLabel(item.device);
                                         const online =
                                             isOnline(item.device.lastSeenAt) &&
-                                            item.device.status !== "enrolling" &&
                                             item.device.status !== "disabled";
 
                                         return (

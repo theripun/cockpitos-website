@@ -96,6 +96,13 @@ const SETTINGS_GROUPS = [
     }
 ];
 
+function isRecentlyOnline(lastSeenAt?: string | null): boolean {
+    if (!lastSeenAt) return false;
+    const seenAt = new Date(lastSeenAt).getTime();
+    if (!Number.isFinite(seenAt)) return false;
+    return Date.now() - seenAt <= 35_000;
+}
+
 export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
     const [size, setSize] = useState({ width: 900, height: 600 });
     const [isMaximized, setIsMaximized] = useState(false);
@@ -149,7 +156,8 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
             try {
                 const res = await fetch(`${BASE_URL}/cockpit/cocktail/devices`, {
                     headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include'
+                    credentials: 'include',
+                    cache: 'no-store'
                 });
                 if (!res.ok) return;
                 const rawDevices = await res.json();
@@ -168,9 +176,8 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
 
     // Poll metrics whenever the selected device changes
     useEffect(() => {
-        if (!device?.device?.id || !isOpen || device.device.status === 'enrolling') {
+        if (!device?.device?.id || !isOpen) {
             setIsLoading(false);
-            if (device?.device?.status === 'enrolling') setIsOnline(false);
             return;
         }
 
@@ -189,6 +196,22 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                 if (latestMetrics) {
                     setMetrics(latestMetrics);
                     setIsOnline(!!latestMetrics.online);
+                    if (latestMetrics.online) {
+                        setCompletedEnrollmentDeviceId(device.device.id);
+                        setDevice((prev: any) => {
+                            if (!prev || prev.device?.id !== device.device.id) return prev;
+                            if (prev.device?.status !== 'enrolling' && prev.device?.enrolledAt && prev.device?.lastSeenAt) return prev;
+                            return {
+                                ...prev,
+                                device: {
+                                    ...prev.device,
+                                    status: prev.device?.status === 'enrolling' ? 'online' : prev.device?.status,
+                                    enrolledAt: prev.device?.enrolledAt || new Date().toISOString(),
+                                    lastSeenAt: prev.device?.lastSeenAt || latestMetrics.lastSeenAt || new Date().toISOString(),
+                                },
+                            };
+                        });
+                    }
                     if (latestMetrics.cpu?.usagePct !== undefined) {
                         setCpuHistory(prev => {
                             const next = [...prev, latestMetrics.cpu.usagePct];
@@ -246,7 +269,14 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
     const [isFetchingUsers, setIsFetchingUsers] = useState(false);
     const [systemLogs, setSystemLogs] = useState<string[]>([]);
     const [isFetchingLogs, setIsFetchingLogs] = useState(false);
+    const deviceIsOnline = !!device?.device &&
+        device.device.status !== 'disabled' &&
+        (isOnline ||
+            metrics?.online === true ||
+            device.device.status === 'online' ||
+            isRecentlyOnline(device.device.lastSeenAt));
     const enrollmentIncomplete = !!device?.device &&
+        !deviceIsOnline &&
         completedEnrollmentDeviceId !== device.device.id &&
         (device.device.status === 'enrolling' || !device.device.enrolledAt);
 
@@ -285,9 +315,9 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                 const current = devices.find((item: any) => item.device?.id === deviceId);
                 if (current) {
                     setDevice(current);
-                    if (current.device?.status !== 'enrolling' || current.device?.enrolledAt) {
+                    if (current.device?.status !== 'enrolling' || current.device?.enrolledAt || isRecentlyOnline(current.device?.lastSeenAt)) {
                         setCompletedEnrollmentDeviceId(deviceId);
-                        setIsOnline(current.device?.status === 'online');
+                        setIsOnline(current.device?.status === 'online' || isRecentlyOnline(current.device?.lastSeenAt));
                         return;
                     }
                 }
@@ -1138,29 +1168,36 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                                                     transition={{ duration: 0.15 }}
                                                     className="absolute top-full left-0 right-0 mt-1 bg-zinc-950 border border-white/10 rounded-xl overflow-hidden z-50 shadow-2xl"
                                                 >
-                                                    {allDevices.map((item) => (
-                                                        <button
-                                                            key={item.device.id}
-                                                            onClick={() => {
-                                                                setDevice(item);
-                                                                setMetrics(null);
-                                                                setIsOnline(false);
-                                                                setSshKeys([]);
-                                                                setShowDevicePicker(false);
-                                                            }}
-                                                            className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/5 transition-colors ${device?.device?.id === item.device.id ? 'bg-blue-600/10' : ''
-                                                                }`}
-                                                        >
-                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.device.status === 'online' ? 'bg-white' : item.device.status === 'enrolling' ? 'bg-amber-400' : 'bg-zinc-600'}`} />
-                                                            <div className="flex flex-col min-w-0">
-                                                                <span className="text-[11px] font-bold text-white truncate">{item.device.name}</span>
-                                                                <span className="text-[9px] text-zinc-600 truncate">{item.device.status === 'enrolling' ? 'Enrollment incomplete' : item.vps.host}</span>
-                                                            </div>
-                                                            {device?.device?.id === item.device.id && (
-                                                                <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400" />
-                                                            )}
-                                                        </button>
-                                                    ))}
+                                                    {allDevices.map((item) => {
+                                                        const itemIsOnline = item.device.status !== 'disabled' &&
+                                                            (item.device.status === 'online' || isRecentlyOnline(item.device.lastSeenAt));
+                                                        const itemEnrollmentIncomplete = !itemIsOnline &&
+                                                            (item.device.status === 'enrolling' || !item.device.enrolledAt);
+
+                                                        return (
+                                                            <button
+                                                                key={item.device.id}
+                                                                onClick={() => {
+                                                                    setDevice(item);
+                                                                    setMetrics(null);
+                                                                    setIsOnline(itemIsOnline);
+                                                                    setSshKeys([]);
+                                                                    setShowDevicePicker(false);
+                                                                }}
+                                                                className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/5 transition-colors ${device?.device?.id === item.device.id ? 'bg-blue-600/10' : ''
+                                                                    }`}
+                                                            >
+                                                                <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${itemIsOnline ? 'bg-white' : itemEnrollmentIncomplete ? 'bg-amber-400' : 'bg-zinc-600'}`} />
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="text-[11px] font-bold text-white truncate">{item.device.name}</span>
+                                                                    <span className="text-[9px] text-zinc-600 truncate">{itemIsOnline ? 'Online' : itemEnrollmentIncomplete ? 'Enrollment incomplete' : item.vps.host}</span>
+                                                                </div>
+                                                                {device?.device?.id === item.device.id && (
+                                                                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                                                )}
+                                                            </button>
+                                                        );
+                                                    })}
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>
@@ -1299,8 +1336,8 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                                                                 <h3 className="text-xl font-bold text-white">{device?.device?.name || "My Server"}</h3>
                                                                 <p className="text-sm text-zinc-500">{metrics?.os?.distro || "Ubuntu Linux"}</p>
                                                                 <div className="flex items-center gap-2 mt-2">
-                                                                    <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]' : enrollmentIncomplete ? 'bg-amber-400' : 'bg-red-500'}`} />
-                                                                    <span className="text-[11px] font-semibold text-zinc-500">{enrollmentIncomplete ? 'Enrollment incomplete' : isOnline ? 'Online' : 'Offline'} • {metrics?.os?.release || "Awaiting agent"}</span>
+                                                                    <div className={`w-2 h-2 rounded-full ${deviceIsOnline ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]' : enrollmentIncomplete ? 'bg-amber-400' : 'bg-red-500'}`} />
+                                                                    <span className="text-[11px] font-semibold text-zinc-500">{enrollmentIncomplete ? 'Enrollment incomplete' : deviceIsOnline ? 'Online' : 'Offline'} • {metrics?.os?.release || "Awaiting agent"}</span>
                                                                 </div>
                                                             </div>
                                                             <div className="ml-auto text-right">
