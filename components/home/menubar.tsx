@@ -1343,10 +1343,10 @@ export function Menubar({
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => setShowMusicDropdown(false)}
+                                        onClick={handleContinueWithoutMusic}
                                         className="w-full border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-900 transition-colors hover:bg-neutral-100"
                                     >
-                                        Close
+                                        Continue Without Music
                                     </button>
                                 </>
                             )}
