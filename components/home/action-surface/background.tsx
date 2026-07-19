@@ -14,7 +14,13 @@ interface BackgroundSelectorProps {
   currentBackground: string;
 }
 
-const backgroundImages = Array.from({ length: 64 }, (_, i) => `/wallpaper/${i + 1}.jpg`);
+const SUPPORTED_WALLPAPER_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "avif"]);
+
+const numberedWallpaperFiles = Array.from({ length: 77 }, (_, i) => `${i + 1}.jpg`);
+
+const backgroundImages = numberedWallpaperFiles
+  .filter((filename) => SUPPORTED_WALLPAPER_EXTENSIONS.has(filename.split(".").pop()?.toLowerCase() ?? ""))
+  .map((filename) => `/wallpaper/${filename}`);
 
 export function BackgroundSelector({
   isOpen,
@@ -25,7 +31,8 @@ export function BackgroundSelector({
   const [selectedImage, setSelectedImage] = useState(currentBackground || backgroundImages[0]);
   const [previewImage, setPreviewImage] = useState(currentBackground || backgroundImages[0]);
 
-  const currentIndex = backgroundImages.indexOf(selectedImage);
+  const selectedIndex = backgroundImages.indexOf(selectedImage);
+  const currentIndex = selectedIndex >= 0 ? selectedIndex : 0;
 
   const handleNext = () => {
     const nextIndex = (currentIndex + 1) % backgroundImages.length;
@@ -102,7 +109,7 @@ export function BackgroundSelector({
                   <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/60" />
                   <div className="absolute bottom-4 left-4 right-4">
                     <p className="text-[10px] font-bold text-white/50 uppercase tracking-widest mb-1">Preview</p>
-                    <p className="text-sm font-semibold text-white truncate">Background {currentIndex + 1}</p>
+                    <p className="text-sm font-semibold text-white truncate">Background {selectedIndex >= 0 ? selectedIndex + 1 : 1}</p>
                   </div>
                 </div>
 
