@@ -299,6 +299,7 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
             const ws = new WebSocket(wsUrl);
             let shellReady = false;
             let installStarted = false;
+            let installSucceeded = false;
 
             ws.onopen = () => {
                 setEnrollmentLogs(prev => [...prev, '[System] Terminal tunnel established.']);
@@ -339,6 +340,7 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                         }
 
                         if (trimmed.includes('Cocktail Agent installed and started!')) {
+                            installSucceeded = true;
                             setEnrollmentStatus('done');
                             void refreshDeviceList();
                         }
@@ -347,9 +349,9 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                     });
                 }
 
-                if (msg.type === 'exit' && installStarted && enrollmentStatus !== 'done') {
-                    setEnrollmentStatus('done');
-                    void refreshDeviceList();
+                if (msg.type === 'exit' && installStarted && !installSucceeded) {
+                    setEnrollmentStatus('error');
+                    setEnrollmentLogs(prev => [...prev, '[ERROR] Installer exited before enrollment completed. Check the last log line and click Enroll Again after the server is ready.']);
                 }
             };
 
