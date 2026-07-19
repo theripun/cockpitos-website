@@ -179,6 +179,17 @@ export function Menubar({
 
     // Used to ignore outside-click closing when clicking INSIDE portal menus.
     const PORTAL_MENU_CLASS = "cockpit-portal-menu";
+    const FULLSCREEN_PROMPT_DATE_KEY = "cockpit_fullscreen_prompt_date";
+
+    const getTodayKey = React.useCallback(() => new Date().toISOString().slice(0, 10), []);
+
+    const markFullscreenPromptSeenToday = React.useCallback(() => {
+        localStorage.setItem(FULLSCREEN_PROMPT_DATE_KEY, getTodayKey());
+    }, [getTodayKey]);
+
+    const hasSeenFullscreenPromptToday = React.useCallback(() => {
+        return localStorage.getItem(FULLSCREEN_PROMPT_DATE_KEY) === getTodayKey();
+    }, [getTodayKey]);
 
     useEffect(() => {
         musicReadyCallbackRef.current = onMusicExperienceReady;
@@ -211,6 +222,7 @@ export function Menubar({
     }, [finishMusicExperience, openMusicPrompt]);
 
     const continueToMusicExperience = React.useCallback(() => {
+        markFullscreenPromptSeenToday();
         setShowFullscreenPrompt(false);
         const savedPreference = localStorage.getItem("cockpit_music_experience");
         if (savedPreference === "allowed") {
@@ -218,7 +230,7 @@ export function Menubar({
         } else {
             openMusicPrompt();
         }
-    }, [openMusicPrompt, playMusic]);
+    }, [markFullscreenPromptSeenToday, openMusicPrompt, playMusic]);
 
     const handleEnterFullscreen = React.useCallback(async () => {
         try {
@@ -244,14 +256,18 @@ export function Menubar({
         audio.preload = "auto";
         musicAudioRef.current = audio;
 
-        setShowFullscreenPrompt(true);
+        if (hasSeenFullscreenPromptToday()) {
+            continueToMusicExperience();
+        } else {
+            setShowFullscreenPrompt(true);
+        }
 
         return () => {
             audio.pause();
             audio.src = "";
             musicAudioRef.current = null;
         };
-    }, [finishMusicExperience, showMusicExperience]);
+    }, [continueToMusicExperience, finishMusicExperience, hasSeenFullscreenPromptToday, showMusicExperience]);
 
     const handleAllowMusic = async () => {
         const started = await playMusic();
