@@ -119,6 +119,7 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
     const [showDevicePicker, setShowDevicePicker] = useState(false);
     const [enrollmentStatus, setEnrollmentStatus] = useState<'idle' | 'connecting' | 'running' | 'done' | 'error'>('idle');
     const [enrollmentLogs, setEnrollmentLogs] = useState<string[]>([]);
+    const [completedEnrollmentDeviceId, setCompletedEnrollmentDeviceId] = useState<string | null>(null);
 
     const [device, setDevice] = useState<any>(null);
     const [metrics, setMetrics] = useState<any>(null);
@@ -245,7 +246,9 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
     const [isFetchingUsers, setIsFetchingUsers] = useState(false);
     const [systemLogs, setSystemLogs] = useState<string[]>([]);
     const [isFetchingLogs, setIsFetchingLogs] = useState(false);
-    const enrollmentIncomplete = !!device?.device && (device.device.status === 'enrolling' || !device.device.enrolledAt);
+    const enrollmentIncomplete = !!device?.device &&
+        completedEnrollmentDeviceId !== device.device.id &&
+        (device.device.status === 'enrolling' || !device.device.enrolledAt);
 
     const refreshDeviceList = async () => {
         try {
@@ -265,10 +268,40 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
         }
     };
 
+    const pollEnrollmentRefresh = async (deviceId: string) => {
+        for (let attempt = 0; attempt < 10; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            try {
+                const res = await fetch(`${BASE_URL}/cockpit/cocktail/devices`, {
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    cache: 'no-store'
+                });
+                if (!res.ok) continue;
+                const devices = await res.json();
+                if (!Array.isArray(devices)) continue;
+
+                setAllDevices(devices);
+                const current = devices.find((item: any) => item.device?.id === deviceId);
+                if (current) {
+                    setDevice(current);
+                    if (current.device?.status !== 'enrolling' || current.device?.enrolledAt) {
+                        setCompletedEnrollmentDeviceId(deviceId);
+                        setIsOnline(current.device?.status === 'online');
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to poll enrollment refresh:', e);
+            }
+        }
+    };
+
     const rerunEnrollment = async () => {
         if (!device?.vps?.id || enrollmentStatus === 'connecting' || enrollmentStatus === 'running') return;
 
         setEnrollmentStatus('connecting');
+        setCompletedEnrollmentDeviceId(null);
         setEnrollmentLogs([
             '[System] Preparing enrollment session...',
             `[System] Target VPS: ${device.vps.username || 'user'}@${device.vps.host}`,
@@ -342,7 +375,10 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                         if (trimmed.includes('Cocktail Agent installed and started!')) {
                             installSucceeded = true;
                             setEnrollmentStatus('done');
+                            setCompletedEnrollmentDeviceId(device.device.id);
+                            setIsOnline(true);
                             void refreshDeviceList();
+                            void pollEnrollmentRefresh(device.device.id);
                         }
 
                         setEnrollmentLogs(prev => [...prev.slice(-80), trimmed]);
