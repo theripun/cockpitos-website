@@ -59,7 +59,7 @@ export default function Usage() {
       console.error(e);
       const hint =
         typeof window !== "undefined" && window.location.origin
-          ? ` Open the app and API on localhost (or set NEXT_PUBLIC_API_BASE_URL to your API). Current page: ${window.location.origin}, API: ${BASE_URL}.`
+          ? ` Open the app with the production API available. Current page: ${window.location.origin}, API: ${BASE_URL}.`
           : "";
       setError(
         e instanceof TypeError

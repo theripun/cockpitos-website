@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { WINDOW_CONSTANTS } from "../window-constants";
 import { BASE_URL } from "@/lib/baseURL";
+import { normalizeAgentInstallCommand } from "@/lib/install-command";
 import { AppHorizontalAdTrack } from "@/components/ads";
 
 interface TaskMonitorProps {
@@ -402,7 +403,7 @@ export function TaskMonitor({ isOpen, deviceId, onClose, onMinimize }: TaskMonit
 
             if (!enrollmentRes.ok) throw new Error("Failed to fetch official install command");
             const enrollmentData = await enrollmentRes.json();
-            const officialInstallCmd = enrollmentData.installCommand;
+            const officialInstallCmd = normalizeAgentInstallCommand(enrollmentData.installCommand || "");
 
             const wsUrl = base.replace(/^http/, "ws") + `/cockpit/terminal/ws?id=${terminalId}`;
             const ws = new WebSocket(wsUrl);

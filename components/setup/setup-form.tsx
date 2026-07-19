@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { X, Monitor, User, Lock, Globe, ArrowRight, ChevronRight, CheckCircle2, Eye, EyeOff, Loader2, AlertCircle, PartyPopperIcon, Hash, PlayCircle, HelpCircle, HelpCircleIcon, Wrench, Copy, Check, Cloud, KeyRound, Server, ShieldCheck, ExternalLink } from "lucide-react";
 import { FaAws } from "react-icons/fa";
 import { BASE_URL } from "@/lib/baseURL";
+import { normalizeAgentInstallCommand } from "@/lib/install-command";
 import { motion, AnimatePresence } from "framer-motion";
 import "@xterm/xterm/css/xterm.css";
 
@@ -363,7 +364,7 @@ export function SetupForm() {
 
             // Step 4: Real Terminal Pipe
             setStatus('installing');
-            let fullCommand = enrollData.installCommand || "";
+            let fullCommand = normalizeAgentInstallCommand(enrollData.installCommand || "");
             // Automatically exit SSH when command finishes
             fullCommand += " ; exit";
 
@@ -447,7 +448,7 @@ export function SetupForm() {
             const enrollData = await enrollRes.json();
 
             setStatus('installing');
-            let fullCommand = enrollData.installCommand || "";
+            let fullCommand = normalizeAgentInstallCommand(enrollData.installCommand || "");
             fullCommand += " ; exit";
             initTerminalPipe(vpsId, fullCommand);
         } catch (err: any) {
