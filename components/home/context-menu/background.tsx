@@ -13,26 +13,19 @@ interface BackgroundSelectorProps {
   currentBackground: string;
 }
 
-const backgroundImages = [
-  "/wallpaper/1.jpg",
-  "/wallpaper/2.jpg",
-  "/wallpaper/3.jpg",
-  "/wallpaper/4.jpg",
-  "/wallpaper/5.jpg",
-  "/wallpaper/6.jpg",
-  "/wallpaper/7.jpg",
-  "/wallpaper/8.jpg",
-  "/wallpaper/9.jpg",
-  "/wallpaper/10.jpg",
-  "/wallpaper/11.jpg",
-  "/wallpaper/12.jpg",
-];
+const SUPPORTED_WALLPAPER_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "avif"]);
+
+const numberedWallpaperFiles = Array.from({ length: 77 }, (_, index) => `${index + 1}.jpg`);
+
+const backgroundImages = numberedWallpaperFiles
+  .filter((filename) => SUPPORTED_WALLPAPER_EXTENSIONS.has(filename.split(".").pop()?.toLowerCase() ?? ""))
+  .map((filename) => `/wallpaper/${filename}`);
 
 export function BackgroundSelector({ isOpen, onClose, onChangeBackground, currentBackground }: BackgroundSelectorProps) {
   const [selectedImage, setSelectedImage] = useState(currentBackground);
   const [previewImage, setPreviewImage] = useState(currentBackground);
 
-  const currentIndex = backgroundImages.indexOf(selectedImage);
+  const currentIndex = Math.max(0, backgroundImages.indexOf(selectedImage));
 
   const handleNext = () => {
     const nextIndex = (currentIndex + 1) % backgroundImages.length;
