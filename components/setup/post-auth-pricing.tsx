@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, ChevronRight, Loader2 } from "lucide-react";
 import { BASE_URL } from "@/lib/baseURL";
 import { getCurrentPlanLabel, type PlanUser } from "@/lib/plan-access";
+import { getCsrfToken } from "@/lib/utils";
 
 type PostAuthPricingProps = {
   onContinueFree: () => void;
@@ -15,7 +16,6 @@ const PRO_MONTHLY_USD = 19;
 const PRO_PROMO_PRICE = 0;
 const OFFER_STORAGE_KEY = "cockpit_welcome80_offer_deadline";
 const OFFER_DURATION_MS = 12 * 60 * 60 * 1000;
-const SELECTED_PLAN_STORAGE_KEY = "cockpit_selected_plan_label";
 
 function formatUsd(n: number) {
   return n.toLocaleString("en-US", {
@@ -227,31 +227,62 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [currentPlanLabel, setCurrentPlanLabel] = useState("Free Plan");
   const [proLoading, setProLoading] = useState(false);
+  const [activationError, setActivationError] = useState<string | null>(null);
   const [modal, setModal] = useState<"free" | "pro" | null>(null);
   const isPaidPlanSelected = currentPlanLabel !== "Free Plan";
 
-  const selectPlan = useCallback((label: "Free Plan" | "Pro Plan") => {
-    localStorage.setItem(SELECTED_PLAN_STORAGE_KEY, label);
-    setCurrentPlanLabel(label);
+  const getReadyCsrfToken = useCallback(async () => {
+    let token = getCsrfToken();
+    if (token) return token;
+
+    await fetch(`${BASE_URL}/auth/csrf`, { credentials: "include" });
+    token = getCsrfToken();
+    if (!token) {
+      throw new Error("Security token missing. Refresh the page and try again.");
+    }
+    return token;
+  }, []);
+
+  const activateProOffer = useCallback(async () => {
+    const token = await getReadyCsrfToken();
+    const res = await fetch(`${BASE_URL}/users/me/subscription/pro-offer`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "x-csrf-token": token,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error("Could not activate Pro. Please try again.");
+    }
+
+    return (await res.json()) as PlanUser;
+  }, [getReadyCsrfToken]);
+
+  const setPlanFromBackend = useCallback((user: PlanUser) => {
+    setCurrentPlanLabel(getCurrentPlanLabel(user));
   }, []);
 
   const continueAfterFreeSelection = useCallback(() => {
     if (isPaidPlanSelected) return;
-    selectPlan("Free Plan");
     onContinueFree();
-  }, [isPaidPlanSelected, onContinueFree, selectPlan]);
+  }, [isPaidPlanSelected, onContinueFree]);
 
   const continueAfterProActivation = useCallback(async () => {
     if (proLoading) return;
-    selectPlan("Pro Plan");
+    setActivationError(null);
     setProLoading(true);
     try {
+      const data = await activateProOffer();
+      setPlanFromBackend(data);
       await Promise.resolve(onContinuePro());
     } catch (e) {
       console.error(e);
+      setActivationError(e instanceof Error ? e.message : "Could not activate Pro. Please try again.");
       setProLoading(false);
     }
-  }, [onContinuePro, proLoading, selectPlan]);
+  }, [activateProOffer, onContinuePro, proLoading, setPlanFromBackend]);
 
   const handleContinuePro = useCallback(async () => {
     if (proLoading) return;
@@ -259,17 +290,12 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
       await continueAfterProActivation();
       return;
     }
-    selectPlan("Pro Plan");
+    setActivationError(null);
     setModal("pro");
-  }, [continueAfterProActivation, isPaidPlanSelected, proLoading, selectPlan]);
+  }, [continueAfterProActivation, isPaidPlanSelected, proLoading]);
 
   useEffect(() => {
     let cancelled = false;
-    const restoreId = window.setTimeout(() => {
-      if (cancelled) return;
-      const storedPlanLabel = localStorage.getItem(SELECTED_PLAN_STORAGE_KEY);
-      if (storedPlanLabel) setCurrentPlanLabel(storedPlanLabel);
-    }, 0);
 
     (async () => {
       try {
@@ -278,9 +304,7 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
         const data = (await res.json()) as PlanUser & { email?: string };
         if (typeof data?.email === "string" && !cancelled) setUserEmail(data.email);
         if (!cancelled && hasExplicitPlanData(data)) {
-          const label = getCurrentPlanLabel(data);
-          localStorage.setItem(SELECTED_PLAN_STORAGE_KEY, label);
-          setCurrentPlanLabel(label);
+          setPlanFromBackend(data);
         }
       } catch {
         /* ignore */
@@ -288,9 +312,8 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
     })();
     return () => {
       cancelled = true;
-      window.clearTimeout(restoreId);
     };
-  }, []);
+  }, [setPlanFromBackend]);
 
   return (
     <>
@@ -363,7 +386,6 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
               disabled={isPaidPlanSelected}
               onClick={() => {
                 if (isPaidPlanSelected) return;
-                selectPlan("Free Plan");
                 setModal("free");
               }}
               className="w-full h-10 text-[13px] font-medium flex items-center justify-center gap-1.5 bg-white/5 border border-white/15 text-white hover:bg-white/10 rounded-none transition-colors disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-white/35 disabled:hover:bg-white/[0.03]"
@@ -474,6 +496,11 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
             <p className="text-[11px] text-white/40 mt-3 text-center sm:text-left leading-snug">
               Free for 12 months. You can cancel anytime before renewal.
             </p>
+            {activationError ? (
+              <p className="mt-2 text-center text-[11px] font-medium leading-snug text-red-200 sm:text-left">
+                {activationError}
+              </p>
+            ) : null}
           </article>
         </div>
       </div>
@@ -503,6 +530,11 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
                   <p className="mt-3 text-[15px] leading-6 text-neutral-600">
                     Your first year of Cockpit Pro is free. You now have the full experience with no ads, higher limits, and complete device access. You can cancel anytime before renewal.
                   </p>
+                  {activationError ? (
+                    <p className="mt-4 text-[13px] font-medium leading-5 text-red-600">
+                      {activationError}
+                    </p>
+                  ) : null}
                   <button
                     type="button"
                     disabled={proLoading}
@@ -530,7 +562,7 @@ export function PostAuthPricing({ onContinueFree, onContinuePro }: PostAuthPrici
                     <button
                       type="button"
                       onClick={() => {
-                        selectPlan("Pro Plan");
+                        setActivationError(null);
                         setModal("pro");
                       }}
                       className="h-11 rounded-none bg-black text-[14px] font-semibold text-white transition-colors hover:bg-neutral-900"
