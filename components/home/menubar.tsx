@@ -180,6 +180,7 @@ export function Menubar({
     // Used to ignore outside-click closing when clicking INSIDE portal menus.
     const PORTAL_MENU_CLASS = "cockpit-portal-menu";
     const FULLSCREEN_PROMPT_DATE_KEY = "cockpit_fullscreen_prompt_date";
+    const MUSIC_PROMPT_DATE_KEY = "cockpit_music_prompt_date";
 
     const getTodayKey = React.useCallback(() => new Date().toISOString().slice(0, 10), []);
 
@@ -191,6 +192,14 @@ export function Menubar({
         return localStorage.getItem(FULLSCREEN_PROMPT_DATE_KEY) === getTodayKey();
     }, [getTodayKey]);
 
+    const markMusicPromptSeenToday = React.useCallback(() => {
+        localStorage.setItem(MUSIC_PROMPT_DATE_KEY, getTodayKey());
+    }, [getTodayKey]);
+
+    const hasSeenMusicPromptToday = React.useCallback(() => {
+        return localStorage.getItem(MUSIC_PROMPT_DATE_KEY) === getTodayKey();
+    }, [getTodayKey]);
+
     useEffect(() => {
         musicReadyCallbackRef.current = onMusicExperienceReady;
     }, [onMusicExperienceReady]);
@@ -200,10 +209,11 @@ export function Menubar({
         musicReadyCallbackRef.current?.();
     }, []);
 
-    const openMusicPrompt = React.useCallback(() => {
+    const openMusicPrompt = React.useCallback((markSeen = true) => {
+        if (markSeen) markMusicPromptSeenToday();
         setMusicStatus("prompt");
         setShowMusicDropdown(true);
-    }, []);
+    }, [markMusicPromptSeenToday]);
 
     const playMusic = React.useCallback(async () => {
         const audio = musicAudioRef.current;
@@ -227,10 +237,13 @@ export function Menubar({
         const savedPreference = localStorage.getItem("cockpit_music_experience");
         if (savedPreference === "allowed") {
             void playMusic();
+        } else if (hasSeenMusicPromptToday()) {
+            setMusicStatus(savedPreference === "denied" ? "denied" : "paused");
+            finishMusicExperience();
         } else {
             openMusicPrompt();
         }
-    }, [markFullscreenPromptSeenToday, openMusicPrompt, playMusic]);
+    }, [finishMusicExperience, hasSeenMusicPromptToday, markFullscreenPromptSeenToday, openMusicPrompt, playMusic]);
 
     const handleEnterFullscreen = React.useCallback(async () => {
         try {
@@ -276,6 +289,7 @@ export function Menubar({
 
     const handleContinueWithoutMusic = () => {
         musicAudioRef.current?.pause();
+        localStorage.setItem("cockpit_music_experience", "denied");
         setMusicStatus("denied");
         setShowMusicDropdown(false);
         finishMusicExperience();
@@ -756,7 +770,12 @@ export function Menubar({
 
     const toggleMusicDropdown = (e: React.MouseEvent) => {
         e.stopPropagation();
-        setShowMusicDropdown((v) => !v);
+        if (showMusicDropdown) {
+            setShowMusicDropdown(false);
+        } else {
+            setShowFullscreenPrompt(false);
+            openMusicPrompt(false);
+        }
         setActiveMenu(null);
         setShowDropdown(false);
     };

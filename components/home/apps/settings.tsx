@@ -132,6 +132,8 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
     const [metrics, setMetrics] = useState<any>(null);
     const [isOnline, setIsOnline] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [hasLoadedDevices, setHasLoadedDevices] = useState(false);
+    const [hasCheckedMetrics, setHasCheckedMetrics] = useState(false);
     const [sshKeys, setSshKeys] = useState<any[]>([]);
     const [isFetchingSsh, setIsFetchingSsh] = useState(false);
     const [isAddingSsh, setIsAddingSsh] = useState(false);
@@ -153,21 +155,34 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
         if (!isOpen) return;
 
         const fetchDeviceList = async () => {
+            setFetchingDevices(true);
+            setHasLoadedDevices(false);
             try {
                 const res = await fetch(`${BASE_URL}/cockpit/cocktail/devices`, {
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
                     cache: 'no-store'
                 });
-                if (!res.ok) return;
+                if (!res.ok) {
+                    setAllDevices([]);
+                    setDevice(null);
+                    return;
+                }
                 const rawDevices = await res.json();
                 const devices = Array.isArray(rawDevices) ? rawDevices : [];
                 setAllDevices(devices);
                 if (devices.length > 0 && !device) {
                     setDevice(devices[0]);
+                    setIsOnline(devices[0].device?.status === 'online' || isRecentlyOnline(devices[0].device?.lastSeenAt));
+                } else if (devices.length === 0) {
+                    setDevice(null);
+                    setIsOnline(false);
                 }
             } catch (e) {
                 console.error('Failed to fetch devices:', e);
+            } finally {
+                setHasLoadedDevices(true);
+                setFetchingDevices(false);
             }
         };
 
@@ -178,10 +193,12 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
     useEffect(() => {
         if (!device?.device?.id || !isOpen) {
             setIsLoading(false);
+            setHasCheckedMetrics(true);
             return;
         }
 
         setIsLoading(true);
+        setHasCheckedMetrics(false);
         let pollInterval: any;
 
         const fetchMetrics = async () => {
@@ -218,10 +235,12 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                             return next.slice(-24);
                         });
                     }
-                    setIsLoading(false);
                 }
             } catch (e) {
                 console.error('Failed to poll metrics:', e);
+            } finally {
+                setIsLoading(false);
+                setHasCheckedMetrics(true);
             }
         };
 
@@ -276,6 +295,8 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
             device.device.status === 'online' ||
             isRecentlyOnline(device.device.lastSeenAt));
     const enrollmentIncomplete = !!device?.device &&
+        hasLoadedDevices &&
+        hasCheckedMetrics &&
         !deviceIsOnline &&
         completedEnrollmentDeviceId !== device.device.id &&
         (device.device.status === 'enrolling' || !device.device.enrolledAt);
