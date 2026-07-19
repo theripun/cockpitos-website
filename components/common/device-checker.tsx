@@ -70,20 +70,20 @@ export default function DeviceChecker() {
     }
 
     return (
-        <div className={`fixed inset-0 z-[9999] bg-[#030712] ${visibilityClass} items-center justify-center overflow-hidden px-5 py-6 text-white transition-all duration-500`}>
+        <div className={`fixed inset-0 z-[9999] bg-[#030712] ${visibilityClass} items-center justify-center overflow-x-hidden overflow-y-auto px-3 py-3 text-white transition-all duration-500 min-[390px]:px-4 min-[390px]:py-4 sm:px-5 sm:py-6`}>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_8%,rgba(39,144,255,0.36),transparent_30%),radial-gradient(circle_at_18%_88%,rgba(0,221,255,0.16),transparent_28%),linear-gradient(135deg,#020617_0%,#071a3f_48%,#0b5cff_100%)]" />
 
-            <div className="relative flex h-full max-h-[780px] w-full max-w-[560px] flex-col overflow-hidden rounded-[58px] bg-[linear-gradient(180deg,#020817_0%,#08327f_58%,#18b8ff_100%)] px-8 pb-8 pt-9 shadow-[0_28px_60px_rgba(0,8,30,0.5),inset_0_1px_0_rgba(255,255,255,0.18)] sm:px-14 sm:pb-11 sm:pt-12">
+            <div className="relative flex h-[min(100%,780px)] min-h-[520px] w-full max-w-[560px] flex-col overflow-hidden rounded-[34px] bg-[linear-gradient(180deg,#020817_0%,#08327f_58%,#18b8ff_100%)] px-6 pb-6 pt-7 shadow-[0_28px_60px_rgba(0,8,30,0.5),inset_0_1px_0_rgba(255,255,255,0.18)] min-[390px]:rounded-[44px] min-[390px]:pb-8 min-[390px]:pt-9 min-[470px]:px-8 sm:rounded-[58px] sm:px-14 sm:pb-11 sm:pt-12">
                 {/* <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_70%_16%,rgba(64,178,255,0.28),transparent_22%),radial-gradient(circle_at_26%_72%,rgba(255,255,255,0.12),transparent_28%)]" /> */}
 
-                <div className="relative z-10">
+                <div className="relative z-10 shrink-0">
                     
-                    <h1 className="max-w-[430px] text-[54px] font-black leading-[0.95] tracking-[-0.055em] text-white drop-shadow-[0_3px_8px_rgba(10,43,133,0.22)] sm:text-[70px]">
+                    <h1 className="max-w-full text-[42px] font-black leading-[0.98] tracking-normal text-white drop-shadow-[0_3px_8px_rgba(10,43,133,0.22)] min-[390px]:text-[46px] min-[470px]:text-[52px] sm:max-w-[430px] sm:text-[70px]">
                         Device
                         <br />
                         Unsupported!
                     </h1>
-                    <p className="mt-5 max-w-[390px] text-[15px] font-semibold leading-6 text-white sm:text-[17px]">
+                    <p className="mt-4 max-w-[390px] text-[14px] font-semibold leading-[1.55] text-white min-[390px]:mt-5 min-[390px]:text-[15px] sm:text-[17px]">
                         CockpitOS is your private computer in the browser. It lets you
                         manage AWS EC2 or any VPS like a full desktop, with apps, files,
                         terminal, and server controls in one workspace. Pro is free for
@@ -92,10 +92,10 @@ export default function DeviceChecker() {
                     </p>
                 </div>
 
-                <div className="relative z-10 mt-auto flex flex-1 items-end justify-center pb-4 pt-6">
+                <div className="relative z-10 mt-auto flex min-h-0 flex-1 items-end justify-center pb-4 pt-5 min-[390px]:pt-6">
                     <svg
                         aria-hidden="true"
-                        className="w-[92%] max-w-[430px] drop-shadow-[0_28px_28px_rgba(9,47,139,0.24)]"
+                        className="h-full max-h-[290px] w-[88%] max-w-[430px] drop-shadow-[0_28px_28px_rgba(9,47,139,0.24)] min-[390px]:w-[92%]"
                         viewBox="0 0 430 360"
                         fill="none"
                     >
@@ -116,11 +116,11 @@ export default function DeviceChecker() {
                     </svg>
                 </div>
 
-                <div className="relative z-10">
+                <div className="relative z-10 shrink-0">
                     <button
                         type="button"
                         onClick={retryDeviceCheck}
-                        className="flex h-[70px] w-full items-center justify-center rounded-full bg-white text-[18px] font-bold text-black shadow-[0_18px_34px_rgba(7,50,166,0.18)] transition hover:bg-white/80 active:translate-y-px"
+                        className="flex h-14 w-full items-center justify-center rounded-full bg-white px-5 text-[16px] font-bold text-black shadow-[0_18px_34px_rgba(7,50,166,0.18)] transition hover:bg-white/80 active:translate-y-px min-[390px]:h-[70px] min-[390px]:text-[18px]"
                     >
                         Retry on desktop
                     </button>
