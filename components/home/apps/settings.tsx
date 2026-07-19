@@ -46,10 +46,12 @@ import {
     RotateCcw,
     Plus,
     RefreshCw,
-    ChevronDown
+    ChevronDown,
+    Loader2
 } from "lucide-react";
 import { WINDOW_CONSTANTS } from "../window-constants";
 import { BASE_URL } from "@/lib/baseURL";
+import { normalizeAgentInstallCommand } from "@/lib/install-command";
 import { AppHorizontalAdTrack } from "@/components/ads";
 
 interface SettingsProps {
@@ -115,6 +117,8 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
     const [allDevices, setAllDevices] = useState<any[]>([]);
     const [fetchingDevices, setFetchingDevices] = useState(false);
     const [showDevicePicker, setShowDevicePicker] = useState(false);
+    const [enrollmentStatus, setEnrollmentStatus] = useState<'idle' | 'connecting' | 'running' | 'done' | 'error'>('idle');
+    const [enrollmentLogs, setEnrollmentLogs] = useState<string[]>([]);
 
     const [device, setDevice] = useState<any>(null);
     const [metrics, setMetrics] = useState<any>(null);
@@ -148,12 +152,10 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                 });
                 if (!res.ok) return;
                 const rawDevices = await res.json();
-                const enrolledDevices = Array.isArray(rawDevices)
-                    ? rawDevices.filter((d: any) => d.device?.status !== 'enrolling')
-                    : [];
-                setAllDevices(enrolledDevices);
-                if (enrolledDevices.length > 0 && !device) {
-                    setDevice(enrolledDevices[0]);
+                const devices = Array.isArray(rawDevices) ? rawDevices : [];
+                setAllDevices(devices);
+                if (devices.length > 0 && !device) {
+                    setDevice(devices[0]);
                 }
             } catch (e) {
                 console.error('Failed to fetch devices:', e);
@@ -165,8 +167,9 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
 
     // Poll metrics whenever the selected device changes
     useEffect(() => {
-        if (!device?.device?.id || !isOpen) {
+        if (!device?.device?.id || !isOpen || device.device.status === 'enrolling') {
             setIsLoading(false);
+            if (device?.device?.status === 'enrolling') setIsOnline(false);
             return;
         }
 
@@ -242,6 +245,139 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
     const [isFetchingUsers, setIsFetchingUsers] = useState(false);
     const [systemLogs, setSystemLogs] = useState<string[]>([]);
     const [isFetchingLogs, setIsFetchingLogs] = useState(false);
+    const enrollmentIncomplete = !!device?.device && (device.device.status === 'enrolling' || !device.device.enrolledAt);
+
+    const refreshDeviceList = async () => {
+        try {
+            const res = await fetch(`${BASE_URL}/cockpit/cocktail/devices`, {
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                cache: 'no-store'
+            });
+            if (!res.ok) return;
+            const devices = await res.json();
+            if (!Array.isArray(devices)) return;
+            setAllDevices(devices);
+            const current = devices.find((item: any) => item.device?.id === device?.device?.id);
+            if (current) setDevice(current);
+        } catch (e) {
+            console.error('Failed to refresh devices:', e);
+        }
+    };
+
+    const rerunEnrollment = async () => {
+        if (!device?.vps?.id || enrollmentStatus === 'connecting' || enrollmentStatus === 'running') return;
+
+        setEnrollmentStatus('connecting');
+        setEnrollmentLogs([
+            '[System] Preparing enrollment session...',
+            `[System] Target VPS: ${device.vps.username || 'user'}@${device.vps.host}`,
+        ]);
+
+        try {
+            const sessionRes = await fetch(`${BASE_URL}/cockpit/vps/${device.vps.id}/terminal/sessions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+            });
+            if (!sessionRes.ok) throw new Error('Could not open the VPS terminal session');
+            const sessionData = await sessionRes.json();
+            const terminalId = sessionData.sessionId || sessionData.id;
+            if (!terminalId) throw new Error('Server returned an invalid terminal session');
+
+            const enrollmentRes = await fetch(`${BASE_URL}/cockpit/cocktail/devices/enroll/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ vpsId: device.vps.id }),
+            });
+            if (!enrollmentRes.ok) throw new Error('Could not restart enrollment for this device');
+            const enrollmentData = await enrollmentRes.json();
+            const installCommand = `${normalizeAgentInstallCommand(enrollmentData.installCommand || '')} ; exit`;
+
+            const wsUrl = `${BASE_URL.replace(/^http/, 'ws')}/cockpit/terminal/ws?id=${terminalId}`;
+            const ws = new WebSocket(wsUrl);
+            let shellReady = false;
+            let installStarted = false;
+
+            ws.onopen = () => {
+                setEnrollmentLogs(prev => [...prev, '[System] Terminal tunnel established.']);
+                ws.send(JSON.stringify({ type: 'init', cols: 120, rows: 40 }));
+            };
+
+            ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+
+                if (msg.type === 'error') {
+                    setEnrollmentStatus('error');
+                    setEnrollmentLogs(prev => [...prev, `[ERROR] ${msg.message || 'Terminal error'}`]);
+                    return;
+                }
+
+                if (msg.type === 'output') {
+                    const cleanData = String(msg.data || '').replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]|(?:\x1B\]0;.*?\x07)/g, '');
+                    cleanData.split(/\r?\n/).forEach((line) => {
+                        const trimmed = line.trim();
+                        if (!trimmed || trimmed.match(/^\[\?2004[hl]$/)) return;
+
+                        const isPrompt =
+                            trimmed.endsWith('#') ||
+                            trimmed.endsWith('$') ||
+                            trimmed.includes(':~') ||
+                            /^[a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+/.test(trimmed);
+
+                        if (!shellReady && isPrompt) {
+                            shellReady = true;
+                            installStarted = true;
+                            setEnrollmentStatus('running');
+                            setEnrollmentLogs(prev => [...prev.slice(-80), '[System] Shell ready. Running enrollment command...']);
+                            setTimeout(() => {
+                                if (ws.readyState === WebSocket.OPEN) {
+                                    ws.send(JSON.stringify({ type: 'input', data: `${installCommand}\n` }));
+                                }
+                            }, 800);
+                        }
+
+                        if (trimmed.includes('Cocktail Agent installed and started!')) {
+                            setEnrollmentStatus('done');
+                            void refreshDeviceList();
+                        }
+
+                        setEnrollmentLogs(prev => [...prev.slice(-80), trimmed]);
+                    });
+                }
+
+                if (msg.type === 'exit' && installStarted && enrollmentStatus !== 'done') {
+                    setEnrollmentStatus('done');
+                    void refreshDeviceList();
+                }
+            };
+
+            ws.onerror = () => {
+                setEnrollmentStatus('error');
+                setEnrollmentLogs(prev => [...prev, '[ERROR] Terminal tunnel failed.']);
+            };
+
+            ws.onclose = () => {
+                if (installStarted) return;
+                setEnrollmentStatus('error');
+                setEnrollmentLogs(prev => [...prev, '[ERROR] Terminal closed before enrollment started.']);
+            };
+
+            setTimeout(() => {
+                if (!shellReady && ws.readyState === WebSocket.OPEN) {
+                    shellReady = true;
+                    installStarted = true;
+                    setEnrollmentStatus('running');
+                    setEnrollmentLogs(prev => [...prev, '[System] Prompt timeout. Running enrollment command anyway...']);
+                    ws.send(JSON.stringify({ type: 'input', data: `${installCommand}\n` }));
+                }
+            }, 15000);
+        } catch (e: any) {
+            setEnrollmentStatus('error');
+            setEnrollmentLogs(prev => [...prev, `[ERROR] ${e.message || 'Enrollment failed'}`]);
+        }
+    };
 
     // Fetch Docker Containers
     const fetchDockerContainers = async () => {
@@ -977,10 +1113,10 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                                                             className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/5 transition-colors ${device?.device?.id === item.device.id ? 'bg-blue-600/10' : ''
                                                                 }`}
                                                         >
-                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.device.status === 'online' ? 'bg-white' : 'bg-zinc-600'}`} />
+                                                            <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.device.status === 'online' ? 'bg-white' : item.device.status === 'enrolling' ? 'bg-amber-400' : 'bg-zinc-600'}`} />
                                                             <div className="flex flex-col min-w-0">
                                                                 <span className="text-[11px] font-bold text-white truncate">{item.device.name}</span>
-                                                                <span className="text-[9px] text-zinc-600 truncate">{item.vps.host}</span>
+                                                                <span className="text-[9px] text-zinc-600 truncate">{item.device.status === 'enrolling' ? 'Enrollment incomplete' : item.vps.host}</span>
                                                             </div>
                                                             {device?.device?.id === item.device.id && (
                                                                 <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-400" />
@@ -1072,10 +1208,51 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                                                         <Cloud className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
                                                         <h3 className="text-white font-bold text-lg mb-2">No Instances Connected</h3>
                                                         <p className="text-zinc-500 text-sm mb-6 max-w-[300px] mx-auto">Enroll your first server to monitor real-time performance and manage SSH keys.</p>
-                                                        <button className="px-6 py-2.5 bg-white text-black text-sm font-bold rounded-full hover:bg-zinc-200 transition-colors">Start Enrollment</button>
+                                                        <button
+                                                            onClick={() => window.location.assign('/in?configure=true')}
+                                                            className="px-6 py-2.5 bg-white text-black text-sm font-bold rounded-full hover:bg-zinc-200 transition-colors"
+                                                        >
+                                                            Start Enrollment
+                                                        </button>
                                                     </div>
                                                 ) : (
                                                     <>
+                                                        {enrollmentIncomplete && (
+                                                            <div className="p-5 bg-amber-500/10 rounded-3xl border border-amber-400/20 space-y-4">
+                                                                <div className="flex items-start gap-4">
+                                                                    <div className="w-10 h-10 rounded-2xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center shrink-0">
+                                                                        <RefreshCw className={`w-5 h-5 text-amber-300 ${enrollmentStatus === 'connecting' || enrollmentStatus === 'running' ? 'animate-spin' : ''}`} />
+                                                                    </div>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <h3 className="text-sm font-bold text-white">Enrollment incomplete</h3>
+                                                                        <p className="text-[12px] leading-relaxed text-zinc-400 mt-1">
+                                                                            The VPS exists, but the Cocktail agent has not finished enrolling. Run enrollment again from the saved VPS connection.
+                                                                        </p>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={rerunEnrollment}
+                                                                        disabled={enrollmentStatus === 'connecting' || enrollmentStatus === 'running' || !device?.vps?.id}
+                                                                        className="px-4 py-2 bg-white text-black text-[11px] font-black rounded-full hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                                                                    >
+                                                                        {(enrollmentStatus === 'connecting' || enrollmentStatus === 'running') && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                                                        {enrollmentStatus === 'done' ? 'Enrollment rerun' : 'Enroll Again'}
+                                                                    </button>
+                                                                </div>
+                                                                {enrollmentLogs.length > 0 && (
+                                                                    <div className="max-h-44 overflow-y-auto rounded-2xl bg-black/50 border border-white/5 p-3 font-mono text-[11px] leading-relaxed text-zinc-400">
+                                                                        {enrollmentLogs.slice(-12).map((line, idx) => (
+                                                                            <div
+                                                                                key={`${line}-${idx}`}
+                                                                                className={line.startsWith('[ERROR]') ? 'text-red-300' : line.includes('installed and started') || line.startsWith('[System]') ? 'text-emerald-300' : ''}
+                                                                            >
+                                                                                {line}
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+
                                                         <div className="flex items-center gap-6 p-6 bg-zinc-950/50 rounded-3xl border border-white/5">
                                                             <div className="w-20 h-20 rounded-3xl bg-transparent flex items-center justify-center shadow-2xl border border-white/5">
                                                                 <HardDrive className="w-10 h-10 text-zinc-400" />
@@ -1084,8 +1261,8 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                                                                 <h3 className="text-xl font-bold text-white">{device?.device?.name || "My Server"}</h3>
                                                                 <p className="text-sm text-zinc-500">{metrics?.os?.distro || "Ubuntu Linux"}</p>
                                                                 <div className="flex items-center gap-2 mt-2">
-                                                                    <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-red-500'}`} />
-                                                                    <span className="text-[11px] font-semibold text-zinc-500">{isOnline ? 'Online' : 'Offline'} • {metrics?.os?.release || "Jammy Jellyfish"}</span>
+                                                                    <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]' : enrollmentIncomplete ? 'bg-amber-400' : 'bg-red-500'}`} />
+                                                                    <span className="text-[11px] font-semibold text-zinc-500">{enrollmentIncomplete ? 'Enrollment incomplete' : isOnline ? 'Online' : 'Offline'} • {metrics?.os?.release || "Awaiting agent"}</span>
                                                                 </div>
                                                             </div>
                                                             <div className="ml-auto text-right">
