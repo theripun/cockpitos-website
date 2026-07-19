@@ -1220,10 +1220,10 @@ export function Settings({ isOpen, onClose, onMinimize }: SettingsProps) {
                                                 ) : (
                                                     <>
                                                         {enrollmentIncomplete && (
-                                                            <div className="p-5 bg-amber-500/10 rounded-3xl border border-amber-400/20 space-y-4">
+                                                            <div className="p-5 bg-teal-500/10 rounded-3xl border border-teal-400/20 space-y-4">
                                                                 <div className="flex items-start gap-4">
-                                                                    <div className="w-10 h-10 rounded-2xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center shrink-0">
-                                                                        <RefreshCw className={`w-5 h-5 text-amber-300 ${enrollmentStatus === 'connecting' || enrollmentStatus === 'running' ? 'animate-spin' : ''}`} />
+                                                                    <div className="w-10 h-10 rounded-2xl bg-teal-400/10 border border-teal-400/20 flex items-center justify-center shrink-0">
+                                                                        <RefreshCw className={`w-5 h-5 text-teal-300 ${enrollmentStatus === 'connecting' || enrollmentStatus === 'running' ? 'animate-spin' : ''}`} />
                                                                     </div>
                                                                     <div className="min-w-0 flex-1">
                                                                         <h3 className="text-sm font-bold text-white">Enrollment incomplete</h3>
