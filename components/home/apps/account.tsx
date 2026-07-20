@@ -7,13 +7,9 @@ import type { LucideIcon } from "lucide-react";
 import {
   Bell,
   CircleUser,
-  CreditCard,
-  ExternalLink,
   LifeBuoy,
   Maximize2,
   MonitorSmartphone,
-  ScrollText,
-  Tags,
   X,
 } from "lucide-react";
 import { WINDOW_CONSTANTS } from "../window-constants";
@@ -21,32 +17,19 @@ import { cn } from "@/lib/utils";
 import { SectionHeader } from "@/app/account/components/section-header";
 import { AccountProfileOverview } from "@/app/account/components/account-profile-overview";
 import { AccountDevicesOverview } from "@/app/account/components/account-devices-overview";
-import { AccountPlansOverview } from "@/app/account/components/account-plans-overview";
 import { AccountAlertsOverview } from "@/app/account/components/account-alerts-overview";
-import { AccountLogsOverview } from "@/app/account/components/account-logs-overview";
 import { AccountSupportOverview } from "@/app/account/components/account-support-overview";
-import { PlanDetailsSection } from "@/app/account/components/plan-details-section";
-import { BillingUsageCard } from "@/app/account/components/billing-usage-card";
-import { PaymentMethodCard } from "@/app/account/components/payment-method-card";
-import { InvoicesCard } from "@/app/account/components/invoices-card";
-import { AppHorizontalAdRibbon, AppHorizontalAdTrack } from "@/components/ads";
 
 type AccountView =
   | "account"
   | "devices"
-  | "billing"
-  | "plans"
   | "alerts"
-  | "logs"
   | "support";
 
 const NAV: { id: AccountView; label: string; icon: LucideIcon }[] = [
   { id: "account", label: "Account", icon: CircleUser },
   { id: "devices", label: "My Devices", icon: MonitorSmartphone },
-  { id: "billing", label: "Billing", icon: CreditCard },
-  { id: "plans", label: "Plans", icon: Tags },
   { id: "alerts", label: "Alerts", icon: Bell },
-  { id: "logs", label: "Logs", icon: ScrollText },
   { id: "support", label: "Support", icon: LifeBuoy },
 ];
 
@@ -213,41 +196,11 @@ export function AccountApp({ isOpen, onClose, onMinimize }: AccountAppProps) {
             <AccountDevicesOverview className="mt-8" />
           </>
         );
-      case "billing":
-        return (
-          <>
-            <SectionHeader title="Billing & Usage" subtitle="Subscriptions and payments" />
-            <PlanDetailsSection planName="Paid Plan" className="mt-6" />
-            <AppHorizontalAdTrack className="mt-6" />
-            <div className="mt-8 flex flex-col gap-6">
-              <BillingUsageCard />
-              <PaymentMethodCard />
-              <InvoicesCard />
-            </div>
-          </>
-        );
-      case "plans":
-        return (
-          <>
-            <SectionHeader title="Plans & Pricing" subtitle="Compare tiers when you need more" />
-            <AppHorizontalAdRibbon className="mt-5" />
-            <div className="mt-6">
-              <AccountPlansOverview />
-            </div>
-          </>
-        );
       case "alerts":
         return (
           <>
             <SectionHeader title="Alerts & Notifications" subtitle="How Cockpit reaches you" />
             <AccountAlertsOverview className="mt-8" />
-          </>
-        );
-      case "logs":
-        return (
-          <>
-            <SectionHeader title="Logs" subtitle="Activity for your account" />
-            <AccountLogsOverview className="mt-8" />
           </>
         );
       case "support":

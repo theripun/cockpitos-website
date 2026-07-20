@@ -7,11 +7,8 @@ import {
   ArrowLeft,
   Bell,
   CircleUser,
-  CreditCard,
   LifeBuoy,
   MonitorSmartphone,
-  ScrollText,
-  Tags,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -27,10 +24,7 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/account", label: "Account", icon: CircleUser, exact: true },
   { href: "/account/devices", label: "My Devices", icon: MonitorSmartphone },
-  { href: "/account/billing", label: "Billing & Usage", icon: CreditCard },
-  { href: "/account/plans", label: "Plans & Pricing", icon: Tags },
   { href: "/account/alerts", label: "Alerts & Notifications", icon: Bell },
-  { href: "/account/logs", label: "Logs", icon: ScrollText },
   { href: "/account/support", label: "Support", icon: LifeBuoy },
 ];
 

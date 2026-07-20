@@ -6,7 +6,6 @@ import {
   Bell,
   CalendarDays,
   ChevronRight,
-  CreditCard,
   Loader2,
   MonitorSmartphone,
   Shield,
@@ -51,7 +50,6 @@ function memberSince(iso: string) {
 }
 
 const links = [
-  { href: "/account/billing", label: "Billing & usage", icon: CreditCard },
   { href: "/account/devices", label: "My devices", icon: MonitorSmartphone },
   { href: "/account/alerts", label: "Alerts & notifications", icon: Bell },
 ] as const;

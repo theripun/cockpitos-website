@@ -200,6 +200,42 @@ export function Menubar({
         return localStorage.getItem(MUSIC_PROMPT_DATE_KEY) === getTodayKey();
     }, [getTodayKey]);
 
+    const resetLocalCache = React.useCallback(() => {
+        const localKeys = [
+            "cockpit_copyEnabled",
+            "cockpit_pasteEnabled",
+            "cockpit_zoom",
+            "cockpit_fullscreen_prompt_date",
+            "cockpit_music_prompt_date",
+            "cockpit_music_experience",
+            "cockpit_isWidgetsVisible",
+            "cockpit_notification_prefs_v1",
+            "cockpit_tracker_leader",
+            "cockpit_tracker_pulse",
+            "weather_cache",
+        ];
+        const sessionKeys = [
+            "cockpit_home_app_launch_count",
+            "cockpit_home_vignette_threshold",
+            "cockpit_home_vignette_dismissed",
+            "cockpit_multiplex_interstitial_shown",
+        ];
+
+        try {
+            localKeys.forEach((key) => localStorage.removeItem(key));
+        } catch {
+            /* ignore storage errors */
+        }
+        try {
+            sessionKeys.forEach((key) => sessionStorage.removeItem(key));
+        } catch {
+            /* ignore storage errors */
+        }
+
+        (document.body.style as any).zoom = "1";
+        window.location.reload();
+    }, []);
+
     useEffect(() => {
         musicReadyCallbackRef.current = onMusicExperienceReady;
     }, [onMusicExperienceReady]);
@@ -1091,9 +1127,9 @@ export function Menubar({
 
                     <button
                         type="button"
-                        onClick={() => void forceCockpitLogout()}
+                        onClick={resetLocalCache}
                         className="flex items-center gap-1 hover:bg-white/10 px-2 py-0.5 rounded transition-colors text-[10px] font-medium text-white/90 hover:text-white"
-                        title="Reset to clear session and local data"
+                        title="Reset local cache without signing out"
                     >
                         <Power className="w-3.5 h-3.5 shrink-0 opacity-95" aria-hidden />
                         <span className="tabular-nums">Reset</span>
